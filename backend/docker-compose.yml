@@ -1,0 +1,60 @@
+services:
+  psql:
+    image: postgres:14
+    volumes:
+      - postgresql:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    networks:
+      - internal
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ENVIRONMENT: local
+    env_file: .env
+    volumes:
+      - .:/app
+    depends_on:
+      - psql
+    ports:
+      - "8000:8000"
+    networks:
+      - internal
+    stdin_open: true
+    tty: true
+    command: sh -c "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+
+  celery:
+    build:
+      context: .
+      args:
+        ENVIRONMENT: local
+    env_file: .env
+    command: celery --app=mtg_trade_community worker --loglevel=info
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+      - psql
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgresql:
+    name: mtg_postgresql
+    external: true
+  pgadmin-data: {}
