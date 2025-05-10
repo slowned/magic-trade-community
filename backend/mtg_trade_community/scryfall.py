@@ -35,11 +35,6 @@ class Scryfall:
             'prints_search_uri': r['data'][0]['prints_search_uri']
         }
 
-    # def fetch_card_sets(self, card):
-    #     response = requests.get(card['prints_search_uri'], headers=headers)
-    #     r = response.json()
-    #     return r
-
     def get_all_sets(self):
         resource_url = f'{self.scryfall_base_url}/sets/'
         response = requests.get(resource_url, headers=headers)
