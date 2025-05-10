@@ -1,36 +1,47 @@
-import os
-import json
 from django.core.management.base import BaseCommand
+
 from binders.models import Card
+from mtg_trade_community.scryfall import Scryfall, ScryfallRequestError
 
 
 class Command(BaseCommand):
-    help = 'Load cards data from a JSON file into the Card model'
+    help = 'Populate database from scryfall API'
 
     def handle(self, *args, **kwargs):
-        # Obtener la ruta absoluta del archivo JSON
-        base_dir = os.path.dirname(os.path.abspath(__file__))  # Directorio actual del script
-        file_path = os.path.join(base_dir, 'scryfall_m11_filtered.json')
+        sf = Scryfall()
 
-        with open(file_path, 'r') as file:
-            cards_data = json.load(file)
+        try:
+            all_mtg_sets = sf.get_all_sets()['data']
+            # TODO: filtrar sets sin tokens ?
+        except ScryfallRequestError as e:
+            print(e)
+            self.stdout.write(self.style.ERROR('Error trying to fetch all mtg sets'))
+            return
 
-        for card_data in cards_data:
-            # Insertar cada carta en la base de datos
-            card, created = Card.objects.update_or_create(
-                id=card_data["id"],
-                defaults={
-                    "name": card_data["name"],
-                    "set_name": card_data["set_name"],
-                    "color_identity": ",".join(card_data["color_identity"]),  # Convierte la lista a cadena
-                    "uri": card_data["uri"],
-                    "scryfall_uri": card_data["scryfall_uri"],
-                    "image_uri": card_data["image_uri"] if card_data["image_uri"] else ""
-                }
-            )
-            if created:
-                self.stdout.write(self.style.SUCCESS(f'Card "{card.name}" created successfully'))
-            else:
-                self.stdout.write(self.style.WARNING(f'Card "{card.name}" updated successfully'))
+        for mtg_set in all_mtg_sets:
+            try:
+                cards = sf.get_all_cards_by_set(mtg_set['code'])
+            except ScryfallRequestError as e:
+                print(e)
+                continue
+
+            print(mtg_set)
+
+            if not cards['has_more']:  # TODO: iterar sobre todas las paginas del set....
+                for card_data in cards['data']:
+
+                    print(card_data['name'])
+                    card, created = Card.objects.update_or_create(
+                        id=card_data['id'],
+                        defaults={
+                            'name': card_data['name'],
+                            'set_name': card_data['set_name'],
+                            'color_identity': ','.join(card_data['color_identity']),  # Convierte la lista a cadena
+                            'uri': card_data['uri'],
+                            'scryfall_uri': card_data['scryfall_uri'],
+                            'image_uri': card_data['image_uris']['normal'] if card_data.get('image_uris') else ''
+                        }
+                    )
+            self.stdout.write(self.style.SUCCESS(f'Set "{mtg_set}" created successfully'))
 
         self.stdout.write(self.style.SUCCESS('Data loaded successfully'))

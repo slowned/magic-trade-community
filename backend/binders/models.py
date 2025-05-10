@@ -21,8 +21,9 @@ class Card(models.Model):
     name = models.CharField(max_length=255)
     set_name = models.CharField(max_length=255)
     color_identity = models.CharField(max_length=255)
+
     # Tipo (creature, sorc, inst, planeswalker)
-    uri = models.CharField(max_length=32)
+    uri = models.CharField(max_length=255)
     scryfall_uri = models.CharField(max_length=255)
     image_uri = models.URLField(max_length=255)
     # colors
