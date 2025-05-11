@@ -1,1 +1,0 @@
-# https://mtgjson.com/mtggraphql/

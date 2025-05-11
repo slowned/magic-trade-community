@@ -44,7 +44,19 @@ class Scryfall:
 
     def get_all_cards_by_set(self, set_code):
         resource_url = f'{self.scryfall_base_url}/cards/search?q=set:{set_code}'
-        response = requests.get(resource_url, headers=headers)
-        if (response.ok):
-            return response.json()
-        raise ScryfallRequestError(f'get_all_cards_by_set: {set_code} - {response.status_code}')
+
+        def get_page(link):
+            response = requests.get(resource_url, headers=headers)
+            if (response.ok):
+                return response.json()
+            raise ScryfallRequestError(f'get_all_cards_by_set: {set_code} - {response.status_code}')
+
+        data = get_page(resource_url)
+
+        while data['has_more']:
+            for card in data['data']:
+                yield card
+            data = get_page(data['next_page'])
+
+        for card in data['data']:
+            yield card

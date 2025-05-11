@@ -19,17 +19,10 @@ class Command(BaseCommand):
             return
 
         for mtg_set in all_mtg_sets:
-            try:
-                cards = sf.get_all_cards_by_set(mtg_set['code'])
-            except ScryfallRequestError as e:
-                print(e)
-                continue
-
             print(mtg_set)
 
-            if not cards['has_more']:  # TODO: iterar sobre todas las paginas del set....
-                for card_data in cards['data']:
-
+            try:
+                for card_data in sf.get_all_cards_by_set(mtg_set['code']):
                     print(card_data['name'])
                     card, created = Card.objects.update_or_create(
                         id=card_data['id'],
@@ -39,9 +32,16 @@ class Command(BaseCommand):
                             'color_identity': ','.join(card_data['color_identity']),  # Convierte la lista a cadena
                             'uri': card_data['uri'],
                             'scryfall_uri': card_data['scryfall_uri'],
-                            'image_uri': card_data['image_uris']['normal'] if card_data.get('image_uris') else ''
+                            'image_uri': card_data['image_uris']['normal'] if card_data.get('image_uris') else '',
+                            'price_usd': card_data['prices']['usd'],
+                            'price_usd_foil': card_data['prices']['usd_foil'],
+                            'price_usd_etched': card_data['prices']['usd_etched'],
                         }
                     )
-            self.stdout.write(self.style.SUCCESS(f'Set "{mtg_set}" created successfully'))
+            except ScryfallRequestError as e:
+                print(e)
+                continue
+            else:
+                self.stdout.write(self.style.SUCCESS(f'Set "{mtg_set}" created successfully'))
 
         self.stdout.write(self.style.SUCCESS('Data loaded successfully'))

@@ -28,11 +28,9 @@ class Card(models.Model):
     image_uri = models.URLField(max_length=255)
     # colors
 
-    # TODO: agregar precio d cartas
-    # ck_nm_price = models.DecimalField()
-    # ck_sp_price = models.DecimalField()
-    # ck_pl_price = models.DecimalField()
-    # ck_dmg_price = models.DecimalField()
+    price_usd = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=False)
+    price_usd_foil = models.DecimalField(max_digits=12, decimal_places=2, null=True)
+    price_usd_etched = models.DecimalField(max_digits=12, decimal_places=2, null=True)
 
     def __str__(self):
         return f"{self.name}"
@@ -43,6 +41,9 @@ class BinderCard(models.Model):
     card = models.ForeignKey(Card, on_delete=models.CASCADE)
     # TODO: agregar stado (NM, PL, DMG), eliminar quantity y unique_together
     quantity = models.PositiveIntegerField(default=0)
+
+    foil = models.BooleanField(default=False)
+    etched = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('binder', 'card')

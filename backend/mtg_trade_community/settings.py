@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     # 'rest_framework_simplejwt',  # no se esta usando
     "rest_framework",
+    'django_extensions',
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
