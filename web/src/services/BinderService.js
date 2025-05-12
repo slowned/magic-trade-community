@@ -1,7 +1,7 @@
 import axios from "axios";
 // import store from "@/store";
 
-const API_URL = "http://127.0.0.1:8008/"
+const API_URL = "http://localhost:8000/"
 const apiClient = axios.create({
   // ez json mock
   // baseURL: "http://my-json-server.typicode.com/slowned/inmobiliaria/",
