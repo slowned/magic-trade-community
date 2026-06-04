@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "binders.apps.BindersConfig",
     "users.apps.UsersConfig",
     "cards.apps.CardsConfig",
+    "carts.apps.CartsConfig",
     'corsheaders',  # para poder comunicarte desde afuera VUEJS
     'drf_yasg',
     # 'rest_framework_simplejwt',  # no se esta usando
@@ -55,11 +56,16 @@ INSTALLED_APPS = [
 ]
 
 REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': [
-    ],
+    'DEFAULT_PERMISSION_CLASSES': [],
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        # 'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'mtg_trade_community.authentication.OptionalJWTAuthentication',
     ],
+}
+
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
 }
 
 MIDDLEWARE = [
@@ -144,6 +150,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = "static/"
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

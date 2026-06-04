@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Install dependencies only when needed
 COPY package*.json ./
-RUN npm install
+RUN npm install && mkdir -p /app/node_modules/.cache && chmod -R 777 /app/node_modules/.cache
 
 # Copy the rest of the application files (optional for development)
 COPY . .

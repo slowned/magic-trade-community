@@ -10,3 +10,8 @@ db.sqlite3
 media/
 .env.*
 tags
+
+# Claude Code
+CLAUDE.md
+tasks.md
+.claude/

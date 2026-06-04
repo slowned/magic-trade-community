@@ -1,45 +1,197 @@
+from django.contrib.auth.models import User
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import GenericViewSet
 
-from .models import Cart, CartItem, BinderCard
-from .serializers import CartSerializer, CartItemSerializer
+from binders.models import BinderCard, Card
+from carts.models import Cart, CartItem, Message, Order
+from carts.serializers import CartSerializer, MessageSerializer, OrderSerializer
+from mtg_trade_community.authentication import OptionalJWTAuthentication
 
 
-class CartViewSet(ModelViewSet):
-    queryset = Cart.objects.all()
+class CartViewSet(GenericViewSet):
+    authentication_classes = [OptionalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
     serializer_class = CartSerializer
 
-    @action(detail=True, methods=['post'], url_path='add-item')
-    def add_item(self, request, pk=None):
-        cart = self.get_object()
-        binder_card_id = request.data.get('binder_card_id')
-        quantity = request.data.get('quantity', 1)
+    def _buyer_qs(self):
+        return Cart.objects.filter(
+            buyer=self.request.user
+        ).prefetch_related('items__card').select_related('seller', 'buyer', 'order')
 
-        # Find the BinderCard
+    def _participant_cart(self, pk):
+        """Return a cart where the current user is buyer OR seller."""
+        return Cart.objects.filter(
+            pk=pk
+        ).filter(
+            Q(buyer=self.request.user) | Q(seller=self.request.user)
+        ).prefetch_related('items__card').select_related('seller', 'buyer', 'order').first()
+
+    def list(self, request):
+        return Response(CartSerializer(self._buyer_qs(), many=True).data)
+
+    def retrieve(self, request, pk=None):
+        cart = self._participant_cart(pk)
+        if not cart:
+            return Response({'error': 'Carrito no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(CartSerializer(cart).data)
+
+    @action(detail=False, methods=['get'], url_path='selling')
+    def selling(self, request):
+        """Carritos donde el usuario actual es el vendedor."""
+        carts = Cart.objects.filter(
+            seller=request.user
+        ).prefetch_related('items__card').select_related('seller', 'buyer', 'order')
+        return Response(CartSerializer(carts, many=True).data)
+
+    @action(detail=False, methods=['post'], url_path='add-card')
+    def add_card(self, request):
+        seller_username = request.data.get('seller_username')
+        card_id = request.data.get('card_id')
+        quantity = max(1, int(request.data.get('quantity', 1)))
+
+        if not seller_username or not card_id:
+            return Response(
+                {'error': 'seller_username y card_id son requeridos.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if seller_username == request.user.username:
+            return Response(
+                {'error': 'No podés agregar tus propias cartas al carrito.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
-            binder_card = BinderCard.objects.get(id=binder_card_id)
-            # Check if CartItem already exists
-            cart_item, created = CartItem.objects.get_or_create(cart=cart, binder_card=binder_card)
-            cart_item.quantity += quantity
-            cart_item.save()
-            return Response({"status": "item added"}, status=status.HTTP_200_OK)
-        except BinderCard.DoesNotExist:
-            return Response({"error": "BinderCard not found"}, status=status.HTTP_400_BAD_REQUEST)
+            seller = User.objects.get(username=seller_username)
+        except User.DoesNotExist:
+            return Response({'error': 'Vendedor no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
 
-    @action(detail=False, methods=['post'], url_path='add-to-cart')
-    def add_to_cart(self, request):
-        buyer = request.user
-        cart, created = Cart.objects.get_or_create(buyer=buyer, is_finalized=False)
+        try:
+            card = Card.objects.get(id=card_id)
+        except Card.DoesNotExist:
+            return Response({'error': 'Carta no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
 
-        for item in request.data.get('items', []):
-            binder_card_id = item['binder_card_id']
-            quantity = item.get('quantity', 1)
+        # Use the open (non-finalized) cart if one exists, else create a new one
+        cart = Cart.objects.filter(
+            buyer=request.user, seller=seller, is_finalized=False
+        ).first()
 
-            binder_card = BinderCard.objects.get(id=binder_card_id)
-            cart_item, created = CartItem.objects.get_or_create(cart=cart, binder_card=binder_card)
-            cart_item.quantity = quantity
-            cart_item.save()
+        if not cart:
+            cart = Cart.objects.create(buyer=request.user, seller=seller)
 
-        return Response({"status": "Cart updated"}, status=status.HTTP_200_OK)
+        item, created = CartItem.objects.get_or_create(cart=cart, card=card)
+        item.quantity = item.quantity + quantity if not created else quantity
+        item.save()
+
+        cart.refresh_from_db()
+        return Response(CartSerializer(cart).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='remove-card')
+    def remove_card(self, request, pk=None):
+        cart = self._buyer_qs().filter(pk=pk).first()
+        if not cart:
+            return Response({'error': 'Carrito no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        CartItem.objects.filter(cart=cart, card_id=request.data.get('card_id')).delete()
+
+        if not cart.items.exists():
+            cart.delete()
+            return Response({'deleted': True})
+
+        cart.refresh_from_db()
+        return Response(CartSerializer(cart).data)
+
+    @action(detail=True, methods=['post'], url_path='checkout')
+    def checkout(self, request, pk=None):
+        cart = self._buyer_qs().filter(pk=pk).first()
+        if not cart:
+            return Response({'error': 'Carrito no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not cart.items.exists():
+            return Response({'error': 'El carrito está vacío.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if hasattr(cart, 'order'):
+            return Response({'error': 'Este carrito ya tiene un checkout.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        shipping_method = request.data.get('shipping_method')
+        if shipping_method not in ('door_to_door', 'branch_pickup'):
+            return Response({'error': 'Método de envío inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        order = Order.objects.create(
+            cart=cart,
+            shipping_method=shipping_method,
+            shipping_cost=request.data.get('shipping_cost') or None,
+            notes=request.data.get('notes', ''),
+        )
+        cart.is_finalized = True
+        cart.save()
+
+        # Remove sold cards from the seller's binder(s)
+        card_ids = [item.card_id for item in cart.items.all()]
+        BinderCard.objects.filter(
+            binder__user=cart.seller,
+            card_id__in=card_ids,
+        ).delete()
+
+        cart.refresh_from_db()
+        return Response(CartSerializer(cart).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='upload-payment')
+    def upload_payment(self, request, pk=None):
+        """Buyer uploads payment receipt (comprobante)."""
+        cart = self._buyer_qs().filter(pk=pk).first()
+        if not cart or not hasattr(cart, 'order'):
+            return Response({'error': 'Orden no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+
+        proof = request.FILES.get('payment_proof')
+        if not proof:
+            return Response({'error': 'No se encontró el archivo.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        order = cart.order
+        order.payment_proof = proof
+        order.save()
+        cart.refresh_from_db()
+        return Response(CartSerializer(cart).data)
+
+    @action(detail=True, methods=['post'], url_path='update-status')
+    def update_status(self, request, pk=None):
+        cart = self._participant_cart(pk)
+        if not cart or not hasattr(cart, 'order'):
+            return Response({'error': 'Orden no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+
+        new_status = request.data.get('status')
+        valid = ('shipped', 'completed', 'cancelled')
+        if new_status not in valid:
+            return Response({'error': f'Estado inválido. Opciones: {valid}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Seller can mark as shipped; buyer can mark as completed or cancelled
+        order = cart.order
+        if new_status == 'shipped' and cart.seller != request.user:
+            return Response({'error': 'Solo el vendedor puede marcar como enviado.'}, status=status.HTTP_403_FORBIDDEN)
+        if new_status in ('completed', 'cancelled') and cart.buyer != request.user:
+            return Response({'error': 'Solo el comprador puede marcar como completado o cancelado.'}, status=status.HTTP_403_FORBIDDEN)
+
+        order.status = new_status
+        order.save()
+        cart.refresh_from_db()
+        return Response(CartSerializer(cart).data)
+
+    @action(detail=True, methods=['get', 'post'], url_path='messages')
+    def messages(self, request, pk=None):
+        cart = self._participant_cart(pk)
+        if not cart:
+            return Response({'error': 'Carrito no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'GET':
+            msgs = cart.messages.select_related('sender').all()
+            return Response(MessageSerializer(msgs, many=True).data)
+
+        content = request.data.get('content', '').strip()
+        if not content:
+            return Response({'error': 'Mensaje vacío.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        msg = Message.objects.create(cart=cart, sender=request.user, content=content)
+        return Response(MessageSerializer(msg).data, status=status.HTTP_201_CREATED)
