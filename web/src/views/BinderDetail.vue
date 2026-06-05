@@ -96,14 +96,84 @@
     <div v-if="showAddModal" class="modal-overlay" @click.self="closeAddModal">
       <div class="modal">
         <div class="modal-tabs">
+          <button :class="['tab', { active: addTab === 'search' }]" @click="addTab = 'search'">Buscar</button>
           <button :class="['tab', { active: addTab === 'names' }]" @click="addTab = 'names'">Por nombre</button>
           <button :class="['tab', { active: addTab === 'csv' }]" @click="addTab = 'csv'">Importar CSV</button>
         </div>
 
+        <!-- Tab: buscar con autocomplete -->
+        <template v-if="addTab === 'search'">
+          <div class="autocomplete-wrapper">
+            <input
+              v-model="cardSearchQuery"
+              @input="onSearchInput"
+              @keydown.esc="suggestions = []"
+              placeholder="Escribí el nombre de la carta..."
+              class="autocomplete-input"
+              autocomplete="off"
+            />
+            <ul v-if="suggestions.length" class="suggestions-list">
+              <li
+                v-for="name in suggestions"
+                :key="name"
+                class="suggestion-item"
+                @mousedown.prevent="selectSuggestion(name)"
+              >{{ name }}</li>
+            </ul>
+          </div>
+
+          <!-- Editions picker -->
+          <div v-if="cardEditions.length" class="editions-list">
+            <p class="modal-hint">Seleccioná la edición:</p>
+            <div
+              v-for="card in cardEditions"
+              :key="card.id"
+              class="edition-row"
+              :class="{ selected: selectedEdition?.id === card.id }"
+              @click="selectedEdition = card"
+            >
+              <img v-if="card.image_uri" :src="card.image_uri" class="edition-thumb" />
+              <div class="edition-info">
+                <span class="edition-name">{{ card.name }}</span>
+                <span class="edition-set">{{ card.set_name }} ({{ card.set_code?.toUpperCase() }})</span>
+                <span v-if="card.price_usd" class="edition-price">USD {{ card.price_usd }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="addError" class="error-msg">{{ addError }}</div>
+          <div v-if="addResult" class="result-msg">✓ {{ addResult.added }} agregada</div>
+
+          <div class="modal-actions">
+            <button class="btn-ghost" @click="closeAddModal">Cerrar</button>
+            <button class="btn-primary" :disabled="!selectedEdition || adding" @click="handleAddById">
+              {{ adding ? 'Agregando...' : 'Agregar' }}
+            </button>
+          </div>
+        </template>
+
         <!-- Tab: por nombre -->
-        <template v-if="addTab === 'names'">
+        <template v-else-if="addTab === 'names'">
           <p class="modal-hint">Una carta por línea. Podés incluir cantidad: <code>4 Lightning Bolt</code></p>
           <textarea v-model="newCards" placeholder="Lightning Bolt&#10;4 Counterspell&#10;Sol Ring" rows="10" />
+
+          <div v-if="addError" class="error-msg">{{ addError }}</div>
+          <div v-if="addResult" class="result-msg">
+            ✓ {{ addResult.added.length }} cartas agregadas
+            <span v-if="addResult.not_found.length"> · {{ addResult.not_found.length }} no encontradas: {{ addResult.not_found.join(', ') }}</span>
+          </div>
+
+          <div v-if="adding" class="spinner-overlay">
+            <div class="spinner"></div>
+            <span>Buscando cartas en Scryfall...</span>
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn-ghost" @click="closeAddModal">Cerrar</button>
+            <button class="btn-primary" @click="handleAdd" :disabled="adding || !canSubmit">
+              {{ adding ? 'Agregando...' : 'Agregar' }}
+            </button>
+          </div>
         </template>
 
         <!-- Tab: importar CSV (Moxfield) -->
@@ -113,26 +183,25 @@
             Formato: <code>Count,Name,Edition,Condition,Language,Foil,Collector Number</code>
           </p>
           <textarea v-model="csvData" placeholder="Count,Name,Edition,Condition,Language,Foil,Collector Number&#10;4,Lightning Bolt,M10,Near Mint,English,," rows="10" />
+
+          <div v-if="addError" class="error-msg">{{ addError }}</div>
+          <div v-if="addResult" class="result-msg">
+            ✓ {{ addResult.added.length }} cartas agregadas
+            <span v-if="addResult.not_found.length"> · {{ addResult.not_found.length }} no encontradas: {{ addResult.not_found.join(', ') }}</span>
+          </div>
+
+          <div v-if="adding" class="spinner-overlay">
+            <div class="spinner"></div>
+            <span>Buscando cartas en Scryfall...</span>
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn-ghost" @click="closeAddModal">Cerrar</button>
+            <button class="btn-primary" @click="handleAdd" :disabled="adding || !canSubmit">
+              {{ adding ? 'Agregando...' : 'Agregar' }}
+            </button>
+          </div>
         </template>
-
-        <div v-if="addError" class="error-msg">{{ addError }}</div>
-        <div v-if="addResult" class="result-msg">
-          ✓ {{ addResult.added.length }} cartas agregadas
-          <span v-if="addResult.not_found.length"> · {{ addResult.not_found.length }} no encontradas: {{ addResult.not_found.join(', ') }}</span>
-        </div>
-
-        <!-- Spinner overlay -->
-        <div v-if="adding" class="spinner-overlay">
-          <div class="spinner"></div>
-          <span>Buscando cartas en Scryfall...</span>
-        </div>
-
-        <div class="modal-actions">
-          <button class="btn-ghost" @click="closeAddModal">Cerrar</button>
-          <button class="btn-primary" @click="handleAdd" :disabled="adding || !canSubmit">
-            {{ adding ? 'Agregando...' : 'Agregar' }}
-          </button>
-        </div>
       </div>
     </div>
 
@@ -229,8 +298,13 @@ export default {
       filterSet: '',
       // Add modal
       showAddModal: false,
-      addTab: 'names',
+      addTab: 'search',
       newCards: '',
+      cardSearchQuery: '',
+      suggestions: [],
+      cardEditions: [],
+      selectedEdition: null,
+      searchDebounce: null,
       csvData: '',
       adding: false,
       addError: null,
@@ -296,8 +370,73 @@ export default {
       this.showAddModal = false;
       this.newCards = '';
       this.csvData = '';
+      this.cardSearchQuery = '';
+      this.suggestions = [];
+      this.cardEditions = [];
+      this.selectedEdition = null;
       this.addError = null;
       this.addResult = null;
+    },
+
+    onSearchInput() {
+      clearTimeout(this.searchDebounce);
+      this.suggestions = [];
+      this.cardEditions = [];
+      this.selectedEdition = null;
+      if (this.cardSearchQuery.length < 2) return;
+      this.searchDebounce = setTimeout(() => this.fetchSuggestions(), 300);
+    },
+
+    async fetchSuggestions() {
+      try {
+        const resp = await fetch(
+          `https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(this.cardSearchQuery)}`,
+          { headers: { Accept: 'application/json' } }
+        );
+        const data = await resp.json();
+        this.suggestions = data.data?.slice(0, 8) || [];
+      } catch { this.suggestions = []; }
+    },
+
+    async selectSuggestion(name) {
+      this.cardSearchQuery = name;
+      this.suggestions = [];
+      this.cardEditions = [];
+      this.selectedEdition = null;
+      try {
+        const resp = await fetch(
+          `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(name)}"&unique=prints&order=released`,
+          { headers: { Accept: 'application/json' } }
+        );
+        const data = await resp.json();
+        this.cardEditions = (data.data || []).map(c => ({
+          id: c.id,
+          name: c.name,
+          set_name: c.set_name,
+          set_code: c.set,
+          image_uri: c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '',
+          price_usd: c.prices?.usd || null,
+        }));
+      } catch { this.cardEditions = []; }
+    },
+
+    async handleAddById() {
+      if (!this.selectedEdition) return;
+      this.adding = true;
+      this.addError = null;
+      this.addResult = null;
+      try {
+        const res = await BinderService.addCardById(this.$route.params.id, this.selectedEdition.id);
+        this.addResult = res.data;
+        this.selectedEdition = null;
+        this.cardEditions = [];
+        this.cardSearchQuery = '';
+        this.fetchBinder();
+      } catch {
+        this.addError = 'Error al agregar la carta.';
+      } finally {
+        this.adding = false;
+      }
     },
     async handleAdd() {
       this.addError = null;
@@ -568,6 +707,41 @@ export default {
 
 .modal-sm { width: 340px; }
 .modal-sm h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+
+/* Autocomplete search */
+.autocomplete-wrapper { position: relative; }
+.autocomplete-input {
+  width: 100%; padding: 10px 12px;
+  background: var(--bg-primary); border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm); color: var(--text-primary);
+  font-size: 14px; font-family: inherit; box-sizing: border-box;
+}
+.suggestions-list {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+  background: var(--bg-surface); border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm); margin: 2px 0 0; padding: 4px 0;
+  max-height: 220px; overflow-y: auto; list-style: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.suggestion-item {
+  padding: 8px 14px; font-size: 13px; cursor: pointer; color: var(--text-primary);
+}
+.suggestion-item:hover { background: var(--bg-elevated); }
+
+/* Editions list */
+.editions-list { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; margin-top: 8px; }
+.edition-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px;
+  border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+  cursor: pointer; transition: background 0.1s;
+}
+.edition-row:hover { background: var(--bg-elevated); }
+.edition-row.selected { border-color: var(--accent); background: rgba(232,197,71,0.08); }
+.edition-thumb { width: 44px; border-radius: 4px; flex-shrink: 0; }
+.edition-info { display: flex; flex-direction: column; gap: 2px; }
+.edition-name { font-size: 13px; font-weight: 600; }
+.edition-set { font-size: 11px; color: var(--text-muted); }
+.edition-price { font-size: 12px; color: var(--accent); font-weight: 600; }
 
 .modal-tabs {
   display: flex;

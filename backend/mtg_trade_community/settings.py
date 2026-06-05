@@ -26,7 +26,7 @@ SECRET_KEY = "django-insecure-+w)^=xs(z6rsq9!p+yr&v63-4t%vtvktpp(!+lv50=_#n-ou9)
 
 DEBUG = env.bool('DJANGO_DEBUG', default=False)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 # Permitir que cualquier origen acceda (en desarrollo)
 CORS_ALLOW_ALL_ORIGINS = True
@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "users.apps.UsersConfig",
     "cards.apps.CardsConfig",
     "carts.apps.CartsConfig",
+    "scanner.apps.ScannerConfig",
     'corsheaders',  # para poder comunicarte desde afuera VUEJS
     'drf_yasg',
     # 'rest_framework_simplejwt',  # no se esta usando

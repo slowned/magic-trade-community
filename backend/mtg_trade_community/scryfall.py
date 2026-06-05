@@ -48,6 +48,17 @@ class Scryfall:
         data['image_uri'] = _get_image_uri(data)
         return data
 
+    def fetch_card_by_id(self, scryfall_id):
+        """Fetch a specific card printing by its Scryfall UUID."""
+        response = requests.get(f'{BASE_URL}/cards/{scryfall_id}', headers=HEADERS)
+        if response.status_code == 404:
+            raise CardNotFound(f'Card not found: {scryfall_id}')
+        if not response.ok:
+            raise ScryfallRequestError(f'fetch_card_by_id({scryfall_id}): {response.status_code}')
+        data = response.json()
+        data['image_uri'] = _get_image_uri(data)
+        return data
+
     def get_bulk_data_url(self, bulk_type='oracle_cards'):
         """Return the download URL for a Scryfall bulk data file."""
         response = requests.get(f'{BASE_URL}/bulk-data', headers=HEADERS)

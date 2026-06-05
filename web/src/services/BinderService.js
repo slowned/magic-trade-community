@@ -1,6 +1,8 @@
 import axios from "axios";
+import store from "@/store";
 
-const API_URL = "http://localhost:8000/";
+const API_URL = "http://192.168.1.114:8000/";
+// const API_URL = "http://localhost:8000/";
 
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -17,13 +19,12 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// On 401, clear stale token so the router guard redirects to login
+// On 401, clear auth from store and localStorage so the router redirects to login
 apiClient.interceptors.response.use(
   response => response,
   error => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      store.dispatch('logout');
     }
     return Promise.reject(error);
   }
@@ -48,6 +49,9 @@ export default {
   },
 
   // Cards in binder
+  addCardById(binderId, cardId) {
+    return apiClient.post(`binders/binders/${binderId}/add-card-by-id/`, { card_id: cardId });
+  },
   addCardsToBinder(binderId, cardNames) {
     return apiClient.post(`binders/binders/${binderId}/add-cards/`, { card_names: cardNames });
   },
@@ -132,6 +136,16 @@ export default {
 
   cardExists(names) {
     return apiClient.post("cards/check-cards/", names);
+  },
+
+  /**
+   * Send a base64-encoded JPEG frame to the scanner endpoint.
+   * Returns { card, distance, confidence } or { card: null, message }.
+   *
+   * @param {string} base64 - Raw base64 string (without the data:image/... prefix)
+   */
+  identifyCard(base64) {
+    return apiClient.post("scanner/identify/", { image: base64 });
   },
 };
 

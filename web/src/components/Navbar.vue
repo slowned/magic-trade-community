@@ -8,6 +8,13 @@
         </router-link>
         <nav class="nav-links">
           <router-link to="/carpetas" class="nav-link">Carpetas</router-link>
+          <router-link v-if="isAuthenticated" to="/scanner" class="nav-link scanner-link" title="Escanear carta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            <span class="scanner-label">Escanear</span>
+          </router-link>
         </nav>
       </div>
 
@@ -151,6 +158,10 @@ export default {
   text-decoration: none;
 }
 .nav-link:hover { color: var(--text-primary); background: var(--bg-elevated); }
+
+.scanner-link { display: flex; align-items: center; gap: 5px; }
+.scanner-link svg { width: 15px; height: 15px; }
+.scanner-label { font-size: 14px; }
 
 .navbar-logo {
   display: flex;

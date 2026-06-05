@@ -1,0 +1,17 @@
+{
+  "name": "MTG Trade Community",
+  "short_name": "MTG Trade",
+  "description": "Compra y vende cartas Magic: The Gathering con la comunidad",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#12131a",
+  "theme_color": "#e8c547",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

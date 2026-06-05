@@ -11,6 +11,7 @@ import OrderChat from '@/views/OrderChat.vue'
 import Profile from '@/views/Profile.vue'
 import Explore from '@/views/Explore.vue'
 import SearchResults from '@/views/SearchResults.vue'
+import Scanner from '@/views/Scanner.vue'
 
 const routes = [
   {
@@ -80,6 +81,12 @@ const routes = [
     name: 'SearchResults',
     component: SearchResults,
     meta: { requiresAuth: false },
+  },
+  {
+    path: '/scanner',
+    name: 'Scanner',
+    component: Scanner,
+    meta: { requiresAuth: true },
   },
 ]
 

@@ -14,32 +14,22 @@ RUN apk add pkgconfig
 RUN set -x && \
     deps=" \
         build-base \
-        postgresql-dev \
+        gcc \
         musl-dev \
         linux-headers \
-        redis \
-        tiff-dev \
-        gcc \
+        python3-dev \
+        libffi-dev \
+        pkgconfig \
+        postgresql-dev \
         jpeg-dev \
         openjpeg-dev \
         zlib-dev \
         freetype-dev \
         lcms2-dev \
         libwebp-dev \
-        tcl-dev \
-        tk-dev \
-        harfbuzz-dev \
-        fribidi-dev \
-        libimagequant-dev \
-        libxcb-dev \
+        tiff-dev \
         libpng-dev \
-        pkgconfig \
-        graphviz \
-        graphviz-dev \
-        ttf-freefont \
-        python3-dev \
-        libffi-dev \
-	shadow \
+        shadow \
     " && \
     python -m venv /py && \
     /py/bin/pip install --upgrade pip && \
@@ -47,6 +37,8 @@ RUN set -x && \
     /py/bin/pip install -r /tmp/requirements.txt && \
     apk del .tmp-deps && \
     adduser --disabled-password --no-create-home app
+
+RUN chown -R app /py
 
 ENV PATH="/scripts:/py/bin:$PATH"
 

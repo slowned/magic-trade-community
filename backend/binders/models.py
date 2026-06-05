@@ -32,6 +32,9 @@ class Card(models.Model):
     price_usd_foil = models.DecimalField(max_digits=12, decimal_places=2, null=True)
     price_usd_etched = models.DecimalField(max_digits=12, decimal_places=2, null=True)
 
+    # 16-char hex string produced by imagehash.phash(); empty until compute_card_hashes runs
+    phash = models.CharField(max_length=16, blank=True, default='')
+
     def __str__(self):
         return self.name
 

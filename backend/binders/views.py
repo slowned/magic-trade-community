@@ -112,6 +112,53 @@ class BinderViewSet(ModelViewSet):
 
         return Response({'added': added, 'not_found': not_found})
 
+    @action(detail=True, methods=['post'], url_path='add-card-by-id')
+    def add_card_by_id(self, request, pk=None):
+        """
+        Add a specific card printing by its Scryfall UUID.
+        Fetches the card from Scryfall if it's not already in the DB.
+
+        Body: { "card_id": "<scryfall-uuid>" }
+        """
+        from mtg_trade_community.scryfall import Scryfall, CardNotFound, ScryfallRequestError
+
+        binder = self.get_object()
+        self._assert_owner(binder)
+
+        card_id = request.data.get('card_id', '').strip()
+        if not card_id:
+            return Response({'error': 'card_id requerido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        card = Card.objects.filter(id=card_id).first()
+        if not card:
+            try:
+                data = Scryfall().fetch_card_by_id(card_id)
+                card, _ = Card.objects.update_or_create(
+                    id=data['id'],
+                    defaults={
+                        'name': data['name'],
+                        'set_name': data.get('set_name', ''),
+                        'set_code': data.get('set', ''),
+                        'color_identity': ','.join(data.get('color_identity', [])),
+                        'type_line': data.get('type_line', ''),
+                        'uri': data.get('uri', ''),
+                        'scryfall_uri': data.get('scryfall_uri', ''),
+                        'image_uri': data.get('image_uri', ''),
+                        'price_usd': data.get('prices', {}).get('usd') or None,
+                        'price_usd_foil': data.get('prices', {}).get('usd_foil') or None,
+                        'price_usd_etched': data.get('prices', {}).get('usd_etched') or None,
+                    },
+                )
+            except CardNotFound:
+                return Response({'error': 'Carta no encontrada en Scryfall.'}, status=status.HTTP_404_NOT_FOUND)
+            except ScryfallRequestError as e:
+                return Response({'error': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        bc, _ = BinderCard.objects.get_or_create(binder=binder, card=card)
+        bc.quantity += 1
+        bc.save()
+        return Response({'added': card.name, 'card': CardSerializer(card).data})
+
     @action(detail=True, methods=['post'], url_path='import-moxfield')
     def import_moxfield(self, request, pk=None):
         """
