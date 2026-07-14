@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.response import Response
 
 from binders.models import Card
+from mtg_trade_community.scryfall import Scryfall
 
 
 class CheckCardsView(APIView):
@@ -24,3 +25,12 @@ class CheckCardsView(APIView):
             "existing_cards": list(existing_cards),
             "not_found": not_found
         })
+
+
+class CardAutocompleteView(APIView):
+    def get(self, request):
+        q = request.query_params.get('q', '').strip()
+        if len(q) < 2:
+            return Response([])
+        suggestions = Scryfall().autocomplete(q)
+        return Response(suggestions)

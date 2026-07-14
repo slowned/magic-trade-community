@@ -18,17 +18,17 @@ export default {
 
 <style>
 :root {
-  --bg-primary: #12131a;
-  --bg-surface: #1e2030;
-  --bg-elevated: #252840;
-  --border-color: #2e3154;
-  --accent: #e8a020;
-  --accent-hover: #f0b840;
-  --text-primary: #e0e0e8;
-  --text-secondary: #8890b0;
-  --text-muted: #505878;
-  --success: #4caf7d;
-  --danger: #e05555;
+  --bg-primary: #f4f5f9;
+  --bg-surface: #ffffff;
+  --bg-elevated: #eaebf2;
+  --border-color: #d4d6e8;
+  --accent: #b86e10;
+  --accent-hover: #d4820f;
+  --text-primary: #1a1b2e;
+  --text-secondary: #555878;
+  --text-muted: #9096b8;
+  --success: #2e8f5e;
+  --danger: #c94040;
   --radius: 8px;
   --radius-sm: 4px;
 }

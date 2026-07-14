@@ -112,9 +112,18 @@
         <h3>Confirmar pedido</h3>
 
         <div class="checkout-summary">
-          <div class="summary-row" v-for="item in checkoutCart.items" :key="item.id">
-            <span>{{ item.card.name }} x{{ item.quantity }}</span>
-            <span>${{ ((item.card.price_usd || 0) * item.quantity).toFixed(2) }}</span>
+          <div class="checkout-items">
+            <div class="checkout-item" v-for="item in checkoutCart.items" :key="item.id">
+              <img v-if="item.card.image_uri" :src="item.card.image_uri" :alt="item.card.name" class="checkout-item-img" />
+              <div class="checkout-item-info">
+                <div class="checkout-item-name">{{ item.card.name }}</div>
+                <div class="checkout-item-set">{{ item.card.set_name }}</div>
+                <div class="checkout-item-price" v-if="item.card.price_usd">
+                  ${{ item.card.price_usd }} × {{ item.quantity }}
+                  <span class="checkout-item-sub"> = ${{ ((item.card.price_usd || 0) * item.quantity).toFixed(2) }}</span>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="summary-divider"></div>
           <div class="summary-row total">
@@ -153,6 +162,13 @@
         </div>
 
         <div v-if="checkoutError" class="error-msg">{{ checkoutError }}</div>
+        <div v-if="unavailableCards.length" class="unavailable-cards">
+          <div class="unavailable-title">Cartas que ya no están disponibles:</div>
+          <ul>
+            <li v-for="card in unavailableCards" :key="card.id">{{ card.name }}</li>
+          </ul>
+          <div class="unavailable-hint">Removelas del carrito para continuar.</div>
+        </div>
 
         <div class="modal-actions">
           <button class="btn-ghost" @click="checkoutCart = null">Cancelar</button>
@@ -179,6 +195,7 @@ export default {
       checkoutCart: null,
       checkoutForm: { shipping_method: '', notes: '' },
       checkoutError: null,
+      unavailableCards: [],
       checkingOut: false,
     };
   },
@@ -204,6 +221,7 @@ export default {
       this.checkoutCart = cart;
       this.checkoutForm = { shipping_method: '', notes: '' };
       this.checkoutError = null;
+      this.unavailableCards = [];
     },
     async confirmCheckout() {
       this.checkoutError = null;
@@ -217,6 +235,10 @@ export default {
         this.$router.push({ name: 'OrderChat', params: { cartId: updated.id } });
       } catch (e) {
         this.checkoutError = e.response?.data?.error || 'Error al procesar el checkout.';
+        this.unavailableCards = e.response?.data?.unavailable_cards || [];
+        if (this.unavailableCards.length) {
+          await this.fetchCarts();
+        }
       } finally {
         this.checkingOut = false;
       }
@@ -314,9 +336,19 @@ export default {
 .modal h3 { font-size: 18px; font-weight: 600; margin-bottom: 20px; }
 
 .checkout-summary { background: var(--bg-elevated); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 20px; }
+
+.checkout-items { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+.checkout-item { display: flex; gap: 12px; align-items: flex-start; }
+.checkout-item-img { width: 52px; height: 72px; object-fit: cover; border-radius: 4px; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.35); }
+.checkout-item-info { flex: 1; min-width: 0; padding-top: 2px; }
+.checkout-item-name { font-size: 14px; font-weight: 500; line-height: 1.3; }
+.checkout-item-set { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.checkout-item-price { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.checkout-item-sub { color: var(--accent); }
+
 .summary-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
 .summary-row.total { color: var(--text-primary); margin-top: 4px; }
-.summary-divider { height: 1px; background: var(--border-color); margin: 8px 0; }
+.summary-divider { height: 1px; background: var(--border-color); margin: 10px 0; }
 
 .form-group { margin-bottom: 18px; }
 .form-group label { display: block; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
@@ -340,5 +372,15 @@ export default {
 }
 
 .error-msg { color: var(--danger); font-size: 13px; margin-bottom: 10px; }
+
+.unavailable-cards {
+  background: rgba(224,85,85,0.08); border: 1px solid rgba(224,85,85,0.25);
+  border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 12px;
+}
+.unavailable-title { font-size: 13px; font-weight: 600; color: var(--danger); margin-bottom: 6px; }
+.unavailable-cards ul { margin: 0 0 6px 16px; padding: 0; }
+.unavailable-cards li { font-size: 13px; color: var(--text-primary); margin-bottom: 2px; }
+.unavailable-hint { font-size: 11px; color: var(--text-secondary); }
+
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 </style>

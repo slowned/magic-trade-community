@@ -1,8 +1,7 @@
 import axios from "axios";
 import store from "@/store";
 
-const API_URL = "http://192.168.1.114:8000/";
-// const API_URL = "http://localhost:8000/";
+const API_URL = process.env.VUE_APP_API_URL || "http://localhost:8000/";
 
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -105,6 +104,9 @@ export default {
   removeFromWishlist(cardId) {
     return apiClient.delete(`binders/wishlist/${cardId}/`);
   },
+  getWishlistMatches() {
+    return apiClient.get('binders/wishlist/matches/');
+  },
 
   // Profile
   getProfile() {
@@ -136,6 +138,9 @@ export default {
 
   cardExists(names) {
     return apiClient.post("cards/check-cards/", names);
+  },
+  autocompleteCards(q) {
+    return apiClient.get("cards/autocomplete/", { params: { q } });
   },
 
   /**

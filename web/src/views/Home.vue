@@ -10,7 +10,7 @@
       <div class="hero-content container">
         <!-- LEFT: copy + search -->
         <div class="hero-left">
-          <div class="hero-badge">🃏 Magic · Pokémon · Yu-Gi-Oh!</div>
+          <div class="hero-badge">🃏 Magic: The Gathering</div>
           <h1 class="hero-title">
             El marketplace<br>
             <span class="gradient-text">TCG Argentina</span>
@@ -24,7 +24,7 @@
             <input
               v-model="searchQuery"
               @keyup.enter="handleSearch"
-              placeholder="Buscá una carta… Black Lotus, Charizard, Dark Magician…"
+              placeholder="Buscá una carta… Black Lotus, Lightning Bolt, Mox Ruby…"
             />
             <button @click="handleSearch">Buscar</button>
           </div>
@@ -414,7 +414,7 @@ export default {
 .card-img {
   width: 155px;
   border-radius: 10px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
   display: block;
 }
 

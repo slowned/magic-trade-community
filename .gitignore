@@ -9,6 +9,8 @@ db.sqlite3
 /static/
 media/
 .env.*
+!.env.example
+!**/.env.example
 tags
 
 # Claude Code

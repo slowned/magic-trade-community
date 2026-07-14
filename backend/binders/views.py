@@ -66,7 +66,7 @@ class BinderViewSet(ModelViewSet):
             qs = qs.filter(is_public=True)
             card_name = self.request.query_params.get('card_name', '').strip()
             if card_name:
-                qs = qs.filter(card_set__name__icontains=card_name).distinct()
+                qs = qs.filter(bindercard__card__name__icontains=card_name).distinct()
         return qs
 
     def perform_create(self, serializer):
@@ -256,3 +256,38 @@ class WishlistViewSet(GenericViewSet):
     def destroy(self, request, pk=None):
         WishlistCard.objects.filter(user=request.user, card_id=pk).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['get'], url_path='matches')
+    def matches(self, request):
+        from collections import defaultdict
+
+        card_ids = list(
+            WishlistCard.objects.filter(user=request.user).values_list('card_id', flat=True)
+        )
+        if not card_ids:
+            return Response([])
+
+        binder_cards = (
+            BinderCard.objects
+            .filter(card_id__in=card_ids, binder__is_public=True)
+            .exclude(binder__user=request.user)
+            .select_related('card', 'binder', 'binder__user')
+        )
+
+        user_map = defaultdict(list)
+        for bc in binder_cards:
+            user_map[bc.binder.user.username].append({
+                'id': bc.card.id,
+                'name': bc.card.name,
+                'image_uri': bc.card.image_uri,
+                'price_usd': str(bc.card.price_usd) if bc.card.price_usd else None,
+                'binder_id': bc.binder.id,
+                'binder_name': bc.binder.name,
+                'quantity': bc.quantity,
+            })
+
+        result = [
+            {'username': username, 'match_count': len(cards), 'cards': cards}
+            for username, cards in sorted(user_map.items(), key=lambda x: -len(x[1]))
+        ]
+        return Response(result)

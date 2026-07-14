@@ -51,36 +51,74 @@
       <div class="chat-layout">
         <!-- Sidebar: order items -->
         <div class="order-sidebar">
-          <h4>Cartas del pedido</h4>
-          <div class="order-items">
-            <div v-for="item in cart.items" :key="item.id" class="order-item">
-              <img v-if="item.card.image_uri" :src="item.card.image_uri" :alt="item.card.name" class="order-item-img" />
-              <div class="order-item-info">
-                <div class="order-item-name">{{ item.card.name }}</div>
-                <div class="order-item-price" v-if="item.card.price_usd">
-                  ${{ item.card.price_usd }} × {{ item.quantity }}
+
+          <!-- Status timeline -->
+          <div class="status-timeline">
+            <h4>Estado del pedido</h4>
+            <div class="timeline">
+              <div :class="['timeline-step', { done: true }]">
+                <div class="timeline-dot"></div>
+                <div class="timeline-body">
+                  <div class="timeline-label">Pedido confirmado</div>
+                  <div class="timeline-sub">{{ formatDate(cart.order.created_at) }}</div>
+                </div>
+              </div>
+              <div :class="['timeline-step', { done: !!cart.order.payment_proof_url }]">
+                <div class="timeline-dot"></div>
+                <div class="timeline-body">
+                  <div class="timeline-label">Comprobante de pago</div>
+                  <div class="timeline-sub" v-if="cart.order.payment_proof_url">
+                    <a :href="cart.order.payment_proof_url" target="_blank" class="proof-link-inline">
+                      <span v-if="isImage(cart.order.payment_proof_url)">
+                        <img :src="cart.order.payment_proof_url" alt="Comprobante" class="proof-img-sm" />
+                      </span>
+                      <span v-else>📄 Ver comprobante</span>
+                    </a>
+                  </div>
+                  <div class="timeline-sub muted" v-else>Pendiente de envío</div>
+                </div>
+              </div>
+              <div :class="['timeline-step', { done: ['shipped','completed'].includes(cart.order.status) }]">
+                <div class="timeline-dot"></div>
+                <div class="timeline-body">
+                  <div class="timeline-label">Enviado</div>
+                  <div class="timeline-sub muted" v-if="!['shipped','completed'].includes(cart.order.status)">Pendiente</div>
+                  <div class="timeline-sub" v-else>{{ cart.order.shipping_method_display }}</div>
+                </div>
+              </div>
+              <div :class="['timeline-step', { done: cart.order.status === 'completed', cancelled: cart.order.status === 'cancelled' }]">
+                <div class="timeline-dot"></div>
+                <div class="timeline-body">
+                  <div class="timeline-label" v-if="cart.order.status === 'cancelled'">Cancelado</div>
+                  <div class="timeline-label" v-else>Recibido</div>
+                  <div class="timeline-sub muted" v-if="!['completed','cancelled'].includes(cart.order.status)">Pendiente</div>
                 </div>
               </div>
             </div>
           </div>
-          <div class="order-sidebar-total">
-            <span>Total cartas</span>
-            <strong>${{ cart.total_usd.toFixed(2) }}</strong>
+
+          <!-- Cards -->
+          <div class="sidebar-section">
+            <h4>Cartas del pedido</h4>
+            <div class="order-items">
+              <div v-for="item in cart.items" :key="item.id" class="order-item">
+                <img v-if="item.card.image_uri" :src="item.card.image_uri" :alt="item.card.name" class="order-item-img" />
+                <div class="order-item-info">
+                  <div class="order-item-name">{{ item.card.name }}</div>
+                  <div class="order-item-set">{{ item.card.set_name }}</div>
+                  <div class="order-item-price" v-if="item.card.price_usd">
+                    ${{ item.card.price_usd }} × {{ item.quantity }}
+                    <span class="order-item-subtotal"> = ${{ ((item.card.price_usd || 0) * item.quantity).toFixed(2) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="order-sidebar-total">
+              <span>Total cartas</span>
+              <strong>${{ cart.total_usd.toFixed(2) }}</strong>
+            </div>
           </div>
 
-          <!-- Payment proof display -->
-          <div v-if="cart.order.payment_proof_url" class="proof-section">
-            <h5>Comprobante de pago</h5>
-            <a :href="cart.order.payment_proof_url" target="_blank" class="proof-link">
-              <img
-                v-if="isImage(cart.order.payment_proof_url)"
-                :src="cart.order.payment_proof_url"
-                alt="Comprobante"
-                class="proof-img"
-              />
-              <span v-else>📄 Ver comprobante</span>
-            </a>
-          </div>
           <div class="order-notes" v-if="cart.order.notes">
             <h5>Notas</h5>
             <p>{{ cart.order.notes }}</p>
@@ -226,6 +264,10 @@ export default {
       const d = new Date(iso);
       return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
     },
+    formatDate(iso) {
+      const d = new Date(iso);
+      return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    },
   }
 };
 </script>
@@ -272,34 +314,71 @@ export default {
 .order-sidebar {
   background: var(--bg-surface); border: 1px solid var(--border-color);
   border-radius: var(--radius); padding: 16px; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 12px;
+  display: flex; flex-direction: column; gap: 16px;
 }
 
-.order-sidebar h4 { font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+.order-sidebar h4 { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
 
-.order-items { display: flex; flex-direction: column; gap: 8px; }
+.sidebar-section { display: flex; flex-direction: column; }
 
-.order-item { display: flex; gap: 8px; align-items: center; }
-.order-item-img { width: 32px; height: 44px; object-fit: cover; border-radius: 3px; flex-shrink: 0; }
-.order-item-info { min-width: 0; }
-.order-item-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.order-item-price { font-size: 11px; color: var(--text-muted); }
+/* Status timeline */
+.status-timeline { border-bottom: 1px solid var(--border-color); padding-bottom: 14px; }
+
+.timeline { display: flex; flex-direction: column; gap: 0; }
+
+.timeline-step {
+  display: flex; gap: 10px; position: relative;
+  padding-bottom: 14px;
+}
+.timeline-step:last-child { padding-bottom: 0; }
+
+.timeline-step::before {
+  content: ''; position: absolute; left: 6px; top: 14px;
+  width: 2px; height: calc(100% - 6px);
+  background: var(--border-color);
+}
+.timeline-step:last-child::before { display: none; }
+
+.timeline-dot {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
+  border: 2px solid var(--border-color); background: var(--bg-elevated);
+  transition: all 0.2s;
+}
+.timeline-step.done .timeline-dot {
+  background: var(--accent); border-color: var(--accent);
+}
+.timeline-step.done::before { background: var(--accent); opacity: 0.4; }
+.timeline-step.cancelled .timeline-dot { background: var(--danger); border-color: var(--danger); }
+
+.timeline-body { flex: 1; min-width: 0; }
+.timeline-label { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.timeline-step:not(.done):not(.cancelled) .timeline-label { color: var(--text-secondary); }
+.timeline-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.timeline-sub.muted { color: var(--text-muted); }
+
+.proof-link-inline { display: inline-block; }
+.proof-img-sm { max-width: 100%; border-radius: 4px; border: 1px solid var(--border-color); margin-top: 4px; }
+
+/* Cards list */
+.order-items { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+
+.order-item { display: flex; gap: 10px; align-items: flex-start; }
+.order-item-img { width: 46px; height: 64px; object-fit: cover; border-radius: 4px; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+.order-item-info { min-width: 0; flex: 1; }
+.order-item-name { font-size: 13px; font-weight: 500; line-height: 1.3; }
+.order-item-set { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.order-item-price { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+.order-item-subtotal { color: var(--accent); }
 
 .order-sidebar-total {
   display: flex; justify-content: space-between; align-items: center;
   padding-top: 10px; border-top: 1px solid var(--border-color);
   font-size: 13px; color: var(--text-secondary);
 }
-.order-sidebar-total strong { color: var(--accent); }
+.order-sidebar-total strong { color: var(--accent); font-size: 15px; }
 
 .order-notes h5 { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
 .order-notes p { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
-
-.proof-section { border-top: 1px solid var(--border-color); padding-top: 12px; }
-.proof-section h5 { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
-.proof-link { display: block; }
-.proof-img { width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border-color); }
-.proof-link span { font-size: 13px; color: var(--accent); }
 
 .upload-label {
   cursor: pointer;

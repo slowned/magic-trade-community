@@ -101,6 +101,17 @@ class Scryfall:
             if url:
                 time.sleep(0.1)
 
+    def autocomplete(self, query):
+        """Return up to 20 card name suggestions for the given partial query."""
+        response = requests.get(
+            f'{BASE_URL}/cards/autocomplete',
+            params={'q': query},
+            headers=HEADERS
+        )
+        if not response.ok:
+            return []
+        return response.json().get('data', [])
+
     def get_all_sets(self):
         response = requests.get(f'{BASE_URL}/sets/', headers=HEADERS)
         if response.ok:

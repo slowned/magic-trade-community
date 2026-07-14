@@ -74,6 +74,12 @@ class CartViewSet(GenericViewSet):
         except Card.DoesNotExist:
             return Response({'error': 'Carta no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
 
+        if not BinderCard.objects.filter(binder__user=seller, card=card, binder__is_public=True).exists():
+            return Response(
+                {'error': 'El vendedor ya no tiene esa carta disponible.'},
+                status=status.HTTP_409_CONFLICT
+            )
+
         # Use the open (non-finalized) cart if one exists, else create a new one
         cart = Cart.objects.filter(
             buyer=request.user, seller=seller, is_finalized=False
@@ -119,6 +125,21 @@ class CartViewSet(GenericViewSet):
         shipping_method = request.data.get('shipping_method')
         if shipping_method not in ('door_to_door', 'branch_pickup'):
             return Response({'error': 'Método de envío inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verify all items are still available in the seller's binders (race-condition guard)
+        unavailable = []
+        for item in cart.items.select_related('card').all():
+            if not BinderCard.objects.filter(binder__user=cart.seller, card=item.card).exists():
+                unavailable.append({'id': item.card_id, 'name': item.card.name})
+
+        if unavailable:
+            return Response(
+                {
+                    'error': 'Algunas cartas ya no están disponibles.',
+                    'unavailable_cards': unavailable,
+                },
+                status=status.HTTP_409_CONFLICT
+            )
 
         order = Order.objects.create(
             cart=cart,
