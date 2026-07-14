@@ -6,7 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from binders.models import BinderCard, Card
+from binders.models import BinderCard
+from cards.models import Card
 from carts.models import Cart, CartItem, Message, Order
 from carts.serializers import CartSerializer, MessageSerializer, OrderSerializer
 from mtg_trade_community.authentication import OptionalJWTAuthentication

@@ -10,14 +10,15 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 from mtg_trade_community.authentication import OptionalJWTAuthentication
 
-from binders.models import Binder, BinderCard, Card, WishlistCard
+from binders.models import Binder, BinderCard, WishlistCard
 from binders.serializers import (
     AddCardsSerializer,
     BinderSerializer,
-    CardSerializer,
     ImportMoxfieldSerializer,
     WishlistCardSerializer,
 )
+from cards.models import Card
+from cards.serializers import CardSerializer
 from mtg_trade_community.scryfall import CardNotFound, Scryfall, ScryfallRequestError
 
 

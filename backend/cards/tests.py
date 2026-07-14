@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from binders.models import Card
+from cards.models import Card
 
 
 class CheckCardsViewTestCase(APITestCase):

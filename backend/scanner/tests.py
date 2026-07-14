@@ -7,7 +7,7 @@ from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from binders.models import Card
+from cards.models import Card
 from scanner.views import _compute_hash
 
 

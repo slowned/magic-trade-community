@@ -2,7 +2,7 @@ import time
 
 from django.core.management.base import BaseCommand
 
-from binders.models import Card
+from cards.models import Card
 from mtg_trade_community.scryfall import Scryfall, ScryfallRequestError
 
 

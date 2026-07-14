@@ -3,7 +3,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from binders.models import Binder, BinderCard, Card, WishlistCard
+from binders.models import Binder, BinderCard, WishlistCard
+from cards.models import Card
 
 
 def make_card(id, name, **kwargs):

@@ -3,7 +3,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from binders.models import Binder, BinderCard, Card
+from binders.models import Binder, BinderCard
+from cards.models import Card
 from carts.models import Cart, CartItem, Order
 
 

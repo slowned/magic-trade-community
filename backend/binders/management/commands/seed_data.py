@@ -24,7 +24,8 @@ import time
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
-from binders.models import Binder, BinderCard, Card
+from binders.models import Binder, BinderCard
+from cards.models import Card
 from mtg_trade_community.scryfall import CardNotFound, Scryfall, ScryfallRequestError
 
 PASSWORD = 'password123'

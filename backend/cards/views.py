@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from binders.models import Card
+from cards.models import Card
 from mtg_trade_community.authentication import OptionalJWTAuthentication
 from mtg_trade_community.scryfall import Scryfall
 

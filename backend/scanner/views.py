@@ -27,8 +27,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from binders.models import Card
-from binders.serializers import CardSerializer
+from cards.models import Card
+from cards.serializers import CardSerializer
 from mtg_trade_community.authentication import OptionalJWTAuthentication
 
 # Cards whose Hamming distance to the query hash exceeds this threshold are

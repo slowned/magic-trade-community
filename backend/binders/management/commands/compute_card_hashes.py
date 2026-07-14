@@ -21,7 +21,7 @@ import requests
 from django.core.management.base import BaseCommand
 from PIL import Image
 
-from binders.models import Card
+from cards.models import Card
 
 HEADERS = {'User-Agent': 'MTGTradeCommunity/1.0'}
 CARD_SIZE = (200, 280)
