@@ -101,6 +101,45 @@ class Scryfall:
             if url:
                 time.sleep(0.1)
 
+    def fetch_cards_by_names(self, names):
+        """
+        Batch-resolve card names via POST /cards/collection (exact match,
+        case-insensitive, up to 75 identifiers per request) instead of one
+        /cards/named request per card.
+
+        Returns (found, not_found):
+          - found: dict of {name.lower(): card_data} for names that matched.
+          - not_found: list of the original names that didn't match exactly
+            (typos, alternate spellings — callers may want to retry those
+            through fetch_card_by_name's fuzzy lookup).
+        """
+        found = {}
+        not_found = []
+        batch_size = 75
+
+        for i in range(0, len(names), batch_size):
+            batch = names[i:i + batch_size]
+            response = requests.post(
+                f'{BASE_URL}/cards/collection',
+                json={'identifiers': [{'name': name} for name in batch]},
+                headers=HEADERS,
+            )
+            if not response.ok:
+                raise ScryfallRequestError(f'fetch_cards_by_names: {response.status_code}')
+
+            data = response.json()
+            for card in data.get('data', []):
+                card['image_uri'] = _get_image_uri(card)
+                found[card['name'].lower()] = card
+            for identifier in data.get('not_found', []):
+                if 'name' in identifier:
+                    not_found.append(identifier['name'])
+
+            if i + batch_size < len(names):
+                time.sleep(0.1)
+
+        return found, not_found
+
     def autocomplete(self, query):
         """Return up to 20 card name suggestions for the given partial query."""
         response = requests.get(

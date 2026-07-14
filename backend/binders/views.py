@@ -1,7 +1,7 @@
 import csv
 import io
-import time
 
+from django.db.models.functions import Lower
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -22,33 +22,72 @@ from cards.serializers import CardSerializer
 from mtg_trade_community.scryfall import CardNotFound, Scryfall, ScryfallRequestError
 
 
-def _fetch_or_get_card(name):
-    """Return (Card, None) or (None, name) if not found."""
-    card = Card.objects.filter(name__iexact=name).first()
-    if card:
-        return card, None
+def _card_defaults(data):
+    """Map a Scryfall card dict to Card model field defaults."""
+    return {
+        'name': data['name'],
+        'set_name': data.get('set_name', ''),
+        'set_code': data.get('set', ''),
+        'color_identity': ','.join(data.get('color_identity', [])),
+        'type_line': data.get('type_line', ''),
+        'uri': data.get('uri', ''),
+        'scryfall_uri': data.get('scryfall_uri', ''),
+        'image_uri': data.get('image_uri', ''),
+        'price_usd': data.get('prices', {}).get('usd') or None,
+        'price_usd_foil': data.get('prices', {}).get('usd_foil') or None,
+        'price_usd_etched': data.get('prices', {}).get('usd_etched') or None,
+    }
+
+
+def _fetch_or_get_cards(names):
+    """
+    Resolve a batch of card names to Card instances in as few Scryfall
+    requests as possible.
+
+    Returns (cards_by_name, not_found):
+      - cards_by_name: dict of {name.strip().lower(): Card}.
+      - not_found: list of the original names that couldn't be resolved,
+        even with a fuzzy-match fallback.
+    """
+    wanted = {}
+    for name in names:
+        stripped = name.strip()
+        if stripped:
+            wanted.setdefault(stripped.lower(), stripped)
+
+    cards_by_name = {}
+    existing = Card.objects.annotate(name_lower=Lower('name')).filter(name_lower__in=wanted.keys())
+    for card in existing:
+        cards_by_name[card.name.lower()] = card
+
+    missing = [orig for key, orig in wanted.items() if key not in cards_by_name]
+    not_found = []
+    if not missing:
+        return cards_by_name, not_found
+
+    sf = Scryfall()
     try:
-        sf = Scryfall()
-        data = sf.fetch_card_by_name(name)
-        card, _ = Card.objects.update_or_create(
-            id=data['id'],
-            defaults={
-                'name': data['name'],
-                'set_name': data.get('set_name', ''),
-                'set_code': data.get('set', ''),
-                'color_identity': ','.join(data.get('color_identity', [])),
-                'type_line': data.get('type_line', ''),
-                'uri': data.get('uri', ''),
-                'scryfall_uri': data.get('scryfall_uri', ''),
-                'image_uri': data.get('image_uri', ''),
-                'price_usd': data.get('prices', {}).get('usd') or None,
-                'price_usd_foil': data.get('prices', {}).get('usd_foil') or None,
-                'price_usd_etched': data.get('prices', {}).get('usd_etched') or None,
-            }
-        )
-        return card, None
-    except (CardNotFound, ScryfallRequestError):
-        return None, name
+        found, still_missing = sf.fetch_cards_by_names(missing)
+    except ScryfallRequestError:
+        return cards_by_name, missing
+
+    for data in found.values():
+        card, _ = Card.objects.update_or_create(id=data['id'], defaults=_card_defaults(data))
+        cards_by_name[card.name.lower()] = card
+
+    # A handful of stragglers (typos, alternate spellings) that the exact-match
+    # collection endpoint couldn't resolve — worth a fuzzy lookup each, since
+    # this is normally a short list rather than the whole batch.
+    for name in still_missing:
+        try:
+            data = sf.fetch_card_by_name(name)
+            card, _ = Card.objects.update_or_create(id=data['id'], defaults=_card_defaults(data))
+            cards_by_name[name.lower()] = card
+            cards_by_name[card.name.lower()] = card
+        except (CardNotFound, ScryfallRequestError):
+            not_found.append(name)
+
+    return cards_by_name, not_found
 
 
 class BinderViewSet(ModelViewSet):
@@ -99,17 +138,18 @@ class BinderViewSet(ModelViewSet):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        added, not_found = [], []
-        for name in serializer.validated_data['card_names']:
-            card, err = _fetch_or_get_card(name.strip())
-            if err:
-                not_found.append(err)
+        names = serializer.validated_data['card_names']
+        cards_by_name, not_found = _fetch_or_get_cards(names)
+
+        added = []
+        for name in names:
+            card = cards_by_name.get(name.strip().lower())
+            if not card:
                 continue
             bc, _ = BinderCard.objects.get_or_create(binder=binder, card=card, defaults={'quantity': 0})
             bc.quantity += 1
             bc.save()
             added.append(card.name)
-            time.sleep(0.05)
 
         return Response({'added': added, 'not_found': not_found})
 
@@ -134,22 +174,7 @@ class BinderViewSet(ModelViewSet):
         if not card:
             try:
                 data = Scryfall().fetch_card_by_id(card_id)
-                card, _ = Card.objects.update_or_create(
-                    id=data['id'],
-                    defaults={
-                        'name': data['name'],
-                        'set_name': data.get('set_name', ''),
-                        'set_code': data.get('set', ''),
-                        'color_identity': ','.join(data.get('color_identity', [])),
-                        'type_line': data.get('type_line', ''),
-                        'uri': data.get('uri', ''),
-                        'scryfall_uri': data.get('scryfall_uri', ''),
-                        'image_uri': data.get('image_uri', ''),
-                        'price_usd': data.get('prices', {}).get('usd') or None,
-                        'price_usd_foil': data.get('prices', {}).get('usd_foil') or None,
-                        'price_usd_etched': data.get('prices', {}).get('usd_etched') or None,
-                    },
-                )
+                card, _ = Card.objects.update_or_create(id=data['id'], defaults=_card_defaults(data))
             except CardNotFound:
                 return Response({'error': 'Carta no encontrada en Scryfall.'}, status=status.HTTP_404_NOT_FOUND)
             except ScryfallRequestError as e:
@@ -174,8 +199,7 @@ class BinderViewSet(ModelViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         reader = csv.DictReader(io.StringIO(serializer.validated_data['csv_data']))
-        added, not_found = [], []
-
+        rows = []
         for row in reader:
             name = (row.get('Name') or row.get('name', '')).strip()
             if not name:
@@ -185,17 +209,20 @@ class BinderViewSet(ModelViewSet):
             except (ValueError, TypeError):
                 quantity = 1
             foil = str(row.get('Foil', '')).strip().lower() in ('yes', 'true', '1', 'foil')
+            rows.append((name, quantity, foil))
 
-            card, err = _fetch_or_get_card(name)
-            if err:
-                not_found.append(err)
+        cards_by_name, not_found = _fetch_or_get_cards([name for name, _, _ in rows])
+
+        added = []
+        for name, quantity, foil in rows:
+            card = cards_by_name.get(name.lower())
+            if not card:
                 continue
             bc, _ = BinderCard.objects.get_or_create(binder=binder, card=card, defaults={'quantity': 0})
             bc.quantity += quantity
             bc.foil = bc.foil or foil
             bc.save()
             added.append(card.name)
-            time.sleep(0.05)
 
         return Response({'added': added, 'not_found': not_found})
 
@@ -242,15 +269,16 @@ class WishlistViewSet(GenericViewSet):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        added, not_found = [], []
-        for name in serializer.validated_data['card_names']:
-            card, err = _fetch_or_get_card(name.strip())
-            if err:
-                not_found.append(err)
+        names = serializer.validated_data['card_names']
+        cards_by_name, not_found = _fetch_or_get_cards(names)
+
+        added = []
+        for name in names:
+            card = cards_by_name.get(name.strip().lower())
+            if not card:
                 continue
             WishlistCard.objects.get_or_create(user=request.user, card=card)
             added.append(card.name)
-            time.sleep(0.05)
 
         return Response({'added': added, 'not_found': not_found})
 
