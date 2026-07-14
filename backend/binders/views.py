@@ -104,7 +104,7 @@ class BinderViewSet(ModelViewSet):
             if err:
                 not_found.append(err)
                 continue
-            bc, _ = BinderCard.objects.get_or_create(binder=binder, card=card)
+            bc, _ = BinderCard.objects.get_or_create(binder=binder, card=card, defaults={'quantity': 0})
             bc.quantity += 1
             bc.save()
             added.append(card.name)
@@ -154,7 +154,7 @@ class BinderViewSet(ModelViewSet):
             except ScryfallRequestError as e:
                 return Response({'error': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
-        bc, _ = BinderCard.objects.get_or_create(binder=binder, card=card)
+        bc, _ = BinderCard.objects.get_or_create(binder=binder, card=card, defaults={'quantity': 0})
         bc.quantity += 1
         bc.save()
         return Response({'added': card.name, 'card': CardSerializer(card).data})
@@ -189,7 +189,7 @@ class BinderViewSet(ModelViewSet):
             if err:
                 not_found.append(err)
                 continue
-            bc, _ = BinderCard.objects.get_or_create(binder=binder, card=card)
+            bc, _ = BinderCard.objects.get_or_create(binder=binder, card=card, defaults={'quantity': 0})
             bc.quantity += quantity
             bc.foil = bc.foil or foil
             bc.save()

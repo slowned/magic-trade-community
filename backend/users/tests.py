@@ -33,8 +33,16 @@ class UserViewSetTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(User.objects.filter(username='user3').exists())
 
+    def test_list_users_requires_auth(self):
+        """Anonymous requests are rejected."""
+        url = reverse('users:user-list')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
     def test_list_users(self):
         """Tests user list."""
+        self.client.force_authenticate(user=self.user1)
         url = reverse('users:user-list')
         response = self.client.get(url)
 
@@ -45,6 +53,7 @@ class UserViewSetTestCase(APITestCase):
 
     def test_user_detail_with_binders(self):
         """Tests user detail with own binders."""
+        self.client.force_authenticate(user=self.user1)
         url = reverse('users:user-detail', args=[self.user1.id])
         response = self.client.get(url)
 
