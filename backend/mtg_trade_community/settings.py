@@ -22,18 +22,16 @@ env = environ.Env()
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-+w)^=xs(z6rsq9!p+yr&v63-4t%vtvktpp(!+lv50=_#n-ou9)"
+SECRET_KEY = env.str('DJANGO_SECRET_KEY')
 
 DEBUG = env.bool('DJANGO_DEBUG', default=False)
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
-# Permitir que cualquier origen acceda (en desarrollo)
-CORS_ALLOW_ALL_ORIGINS = True
-# O para restringirlo a tu frontend específicamente:
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:8080",
-# ]
+CORS_ALLOWED_ORIGINS = env.list(
+    'CORS_ALLOWED_ORIGINS',
+    default=['http://localhost:8080', 'http://localhost:3000'],
+)
 
 # Application definition
 
@@ -45,7 +43,6 @@ INSTALLED_APPS = [
     "scanner.apps.ScannerConfig",
     'corsheaders',  # para poder comunicarte desde afuera VUEJS
     'drf_yasg',
-    # 'rest_framework_simplejwt',  # no se esta usando
     "rest_framework",
     'django_extensions',
     "django.contrib.admin",
@@ -57,7 +54,9 @@ INSTALLED_APPS = [
 ]
 
 REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': [],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'mtg_trade_community.authentication.OptionalJWTAuthentication',
     ],

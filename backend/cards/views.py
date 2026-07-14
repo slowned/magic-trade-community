@@ -1,12 +1,17 @@
 from rest_framework.views import APIView
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from binders.models import Card
+from mtg_trade_community.authentication import OptionalJWTAuthentication
 from mtg_trade_community.scryfall import Scryfall
 
 
 class CheckCardsView(APIView):
+    authentication_classes = [OptionalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         names = request.data.get('names', [])
 
@@ -28,6 +33,9 @@ class CheckCardsView(APIView):
 
 
 class CardAutocompleteView(APIView):
+    authentication_classes = [OptionalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         q = request.query_params.get('q', '').strip()
         if len(q) < 2:
