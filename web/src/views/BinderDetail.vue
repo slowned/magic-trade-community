@@ -8,7 +8,8 @@
         <h1 class="binder-title">{{ binderName || 'Binder' }}</h1>
         <span class="card-meta">
           {{ filteredCards.length }} / {{ cards.length }} cartas ·
-          <span class="owner-name">{{ binderOwner }}</span>
+          <router-link v-if="binderOwner" :to="`/user/${binderOwner}`" class="owner-name">{{ binderOwner }}</router-link>
+          <span v-else class="owner-name">{{ binderOwner }}</span>
         </span>
       </div>
       <div class="header-actions">

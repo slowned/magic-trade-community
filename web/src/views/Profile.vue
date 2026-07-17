@@ -22,7 +22,26 @@
             <span class="stat-n">{{ binders.length }}</span>
             <span class="stat-l">Carpetas</span>
           </div>
+          <div class="profile-stat" v-if="stats">
+            <span class="stat-n">{{ stats.rating_avg !== null ? stats.rating_avg : '—' }}</span>
+            <span class="stat-l">Confiabilidad</span>
+          </div>
         </div>
+        <div class="profile-stats" v-if="stats">
+          <div class="profile-stat">
+            <span class="stat-n">{{ stats.successful_trades }}</span>
+            <span class="stat-l">Trades exitosos</span>
+          </div>
+          <div class="profile-stat">
+            <span class="stat-n">{{ stats.cards_sold }}</span>
+            <span class="stat-l">Cartas vendidas</span>
+          </div>
+        </div>
+        <router-link
+          v-if="form.username"
+          :to="`/user/${form.username}`"
+          class="public-profile-link"
+        >Ver mi perfil público →</router-link>
       </div>
 
       <!-- Form -->
@@ -93,6 +112,7 @@ export default {
       saved: false,
       error: null,
       binders: [],
+      stats: null,
       form: {
         username: '', email: '', first_name: '', last_name: '',
         phone: '', address: '', city: '', province: '',
@@ -106,6 +126,9 @@ export default {
     ]).then(([profileRes, bindersRes]) => {
       Object.assign(this.form, profileRes.data);
       this.binders = bindersRes.data;
+      return BinderService.getPublicProfile(this.form.username)
+        .then(res => { this.stats = res.data; })
+        .catch(() => { /* stats are optional */ });
     }).catch(e => console.error(e))
       .finally(() => { this.loading = false; });
   },
@@ -166,6 +189,11 @@ export default {
 .profile-stat { flex: 1; text-align: center; }
 .stat-n { display: block; font-size: 22px; font-weight: 800; color: var(--accent); }
 .stat-l { display: block; font-size: 12px; color: var(--text-secondary); }
+
+.public-profile-link {
+  display: block; text-align: center; font-size: 13px; color: var(--accent);
+}
+.public-profile-link:hover { text-decoration: underline; }
 
 /* Form */
 .profile-form {

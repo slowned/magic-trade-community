@@ -40,7 +40,13 @@
                 {{ binder.is_public ? 'Público' : 'Privado' }}
               </span>
             </div>
-            <div class="binder-owner">por <span>{{ binder.user }}</span></div>
+            <div class="binder-owner">
+              por
+              <span
+                class="owner-link"
+                @click.stop.prevent="$router.push(`/user/${binder.user}`)"
+              >{{ binder.user }}</span>
+            </div>
             <div class="binder-count">{{ binder.card_count != null ? binder.card_count + ' cartas' : '—' }}</div>
           </router-link>
         </div>
@@ -147,5 +153,6 @@ export default {
 .badge.private { background: rgba(232,160,32,0.15); color: var(--accent); }
 .binder-owner { color: var(--text-secondary); font-size: 13px; margin-bottom: 10px; }
 .binder-owner span { color: var(--accent); }
+.owner-link:hover { text-decoration: underline; }
 .binder-count { color: var(--text-muted); font-size: 12px; }
 </style>

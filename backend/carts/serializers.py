@@ -1,6 +1,15 @@
 from rest_framework import serializers
-from carts.models import Cart, CartItem, Order, Message
+from carts.models import Cart, CartItem, Order, Message, Rating
 from cards.serializers import CardSerializer
+
+
+class RatingSerializer(serializers.ModelSerializer):
+    rater = serializers.SlugRelatedField(read_only=True, slug_field='username')
+    ratee = serializers.SlugRelatedField(read_only=True, slug_field='username')
+
+    class Meta:
+        model = Rating
+        fields = ['id', 'rater', 'ratee', 'score', 'comment', 'created_at']
 
 
 class CartItemSerializer(serializers.ModelSerializer):
@@ -15,13 +24,14 @@ class OrderSerializer(serializers.ModelSerializer):
     shipping_method_display = serializers.CharField(source='get_shipping_method_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     payment_proof_url = serializers.SerializerMethodField()
+    rating = RatingSerializer(read_only=True)
 
     class Meta:
         model = Order
         fields = [
             'id', 'shipping_method', 'shipping_method_display',
             'shipping_cost', 'status', 'status_display', 'notes',
-            'payment_proof_url', 'created_at',
+            'payment_proof_url', 'rating', 'created_at',
         ]
 
     def get_payment_proof_url(self, obj):

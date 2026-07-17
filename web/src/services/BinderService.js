@@ -93,6 +93,9 @@ export default {
   updateOrderStatus(cartId, status) {
     return apiClient.post(`carts/carts/${cartId}/update-status/`, { status });
   },
+  rateOrder(cartId, score, comment = '') {
+    return apiClient.post(`carts/carts/${cartId}/rate/`, { score, comment });
+  },
 
   // Wishlist
   getWishlist() {
@@ -114,6 +117,9 @@ export default {
   },
   updateProfile(data) {
     return apiClient.patch("users/users/profile/", data);
+  },
+  getPublicProfile(username) {
+    return apiClient.get(`users/users/public-profile/${encodeURIComponent(username)}/`);
   },
 
   // Payment proof

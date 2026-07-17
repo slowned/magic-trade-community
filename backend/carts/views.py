@@ -8,7 +8,7 @@ from rest_framework.viewsets import GenericViewSet
 
 from binders.models import BinderCard
 from cards.models import Card
-from carts.models import Cart, CartItem, Message, Order
+from carts.models import Cart, CartItem, Message, Order, Rating
 from carts.serializers import CartSerializer, MessageSerializer, OrderSerializer
 from mtg_trade_community.authentication import OptionalJWTAuthentication
 
@@ -200,6 +200,45 @@ class CartViewSet(GenericViewSet):
         order.save()
         cart.refresh_from_db()
         return Response(CartSerializer(cart).data)
+
+    @action(detail=True, methods=['post'], url_path='rate')
+    def rate(self, request, pk=None):
+        """Buyer rates the seller (0-10) once the order is completed."""
+        cart = self._participant_cart(pk)
+        if not cart or not hasattr(cart, 'order'):
+            return Response({'error': 'Orden no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if cart.buyer != request.user:
+            return Response(
+                {'error': 'Solo el comprador puede puntuar al vendedor.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        order = cart.order
+        if order.status != 'completed':
+            return Response(
+                {'error': 'Solo se puede puntuar un pedido completado.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if hasattr(order, 'rating'):
+            return Response({'error': 'Este pedido ya fue puntuado.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            score = int(request.data.get('score'))
+        except (TypeError, ValueError):
+            return Response({'error': 'score es requerido (0 a 10).'}, status=status.HTTP_400_BAD_REQUEST)
+        if not 0 <= score <= 10:
+            return Response({'error': 'La puntuación debe estar entre 0 y 10.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        Rating.objects.create(
+            order=order,
+            rater=request.user,
+            ratee=cart.seller,
+            score=score,
+            comment=str(request.data.get('comment', '')).strip(),
+        )
+        cart.refresh_from_db()
+        return Response(CartSerializer(cart).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get', 'post'], url_path='messages')
     def messages(self, request, pk=None):

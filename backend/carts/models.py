@@ -1,3 +1,4 @@
+from django.core.validators import MaxValueValidator
 from django.db import models
 from django.contrib.auth.models import User
 
@@ -51,6 +52,19 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order #{self.id} — {self.cart}"
+
+
+class Rating(models.Model):
+    """Buyer's trust rating (0-10) for the seller, one per completed order."""
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name='rating')
+    rater = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ratings_given')
+    ratee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ratings_received')
+    score = models.PositiveSmallIntegerField(validators=[MaxValueValidator(10)])
+    comment = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.rater.username} → {self.ratee.username}: {self.score}/10"
 
 
 class Message(models.Model):

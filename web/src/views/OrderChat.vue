@@ -10,7 +10,9 @@
         <div class="order-info">
           <div class="order-title">
             Pedido con
-            <span class="highlight">{{ isBuyer ? cart.seller : cart.buyer }}</span>
+            <router-link :to="`/user/${isBuyer ? cart.seller : cart.buyer}`" class="highlight">
+              {{ isBuyer ? cart.seller : cart.buyer }}
+            </router-link>
           </div>
           <div class="order-meta">
             <span :class="['status-badge', cart.order.status]">{{ cart.order.status_display }}</span>
@@ -46,6 +48,46 @@
             @click="updateStatus('cancelled')"
           >Cancelar pedido</button>
         </div>
+      </div>
+
+      <!-- Rating form: buyer rates the seller once the order is completed -->
+      <div v-if="isBuyer && cart.order.status === 'completed' && !cart.order.rating" class="rating-panel">
+        <div class="rating-title">
+          ¿Cómo fue tu experiencia con <span class="highlight">{{ cart.seller }}</span>?
+        </div>
+        <p class="rating-sub">Puntuá su confiabilidad de 0 a 10. La puntuación se muestra en su perfil público.</p>
+        <div class="score-row">
+          <button
+            v-for="n in 11"
+            :key="n - 1"
+            :class="['score-btn', { selected: ratingScore === n - 1 }]"
+            @click="ratingScore = n - 1"
+          >{{ n - 1 }}</button>
+        </div>
+        <textarea
+          v-model="ratingComment"
+          class="rating-comment-input"
+          placeholder="Comentario (opcional)"
+          rows="2"
+        ></textarea>
+        <div class="rating-actions">
+          <span v-if="ratingError" class="rating-error">{{ ratingError }}</span>
+          <button
+            class="btn-primary btn-sm"
+            :disabled="ratingScore === null || submittingRating"
+            @click="submitRating"
+          >{{ submittingRating ? 'Enviando...' : 'Enviar puntuación' }}</button>
+        </div>
+      </div>
+
+      <!-- Existing rating -->
+      <div v-else-if="cart.order.rating" class="rating-panel rated">
+        <div class="rating-title">
+          {{ isBuyer ? 'Tu puntuación para' : 'Puntuación de este pedido para' }}
+          <span class="highlight">{{ cart.seller }}</span>
+          <span class="rating-score-badge">{{ cart.order.rating.score }}/10</span>
+        </div>
+        <p v-if="cart.order.rating.comment" class="rating-comment-display">“{{ cart.order.rating.comment }}”</p>
       </div>
 
       <div class="chat-layout">
@@ -187,6 +229,10 @@ export default {
       sending: false,
       uploading: false,
       pollInterval: null,
+      ratingScore: null,
+      ratingComment: '',
+      submittingRating: false,
+      ratingError: null,
     };
   },
   created() {
@@ -242,6 +288,23 @@ export default {
         const res = await BinderService.updateOrderStatus(this.$route.params.cartId, status);
         this.cart = res.data;
       } catch (e) { console.error(e); }
+    },
+    async submitRating() {
+      if (this.ratingScore === null || this.submittingRating) return;
+      this.submittingRating = true;
+      this.ratingError = null;
+      try {
+        const res = await BinderService.rateOrder(
+          this.$route.params.cartId,
+          this.ratingScore,
+          this.ratingComment.trim()
+        );
+        this.cart = res.data;
+      } catch (e) {
+        this.ratingError = e.response?.data?.error || 'Error al enviar la puntuación.';
+      } finally {
+        this.submittingRating = false;
+      }
     },
     async uploadProof(e) {
       const file = e.target.files?.[0];
@@ -306,6 +369,37 @@ export default {
 .btn-sm { padding: 6px 14px; font-size: 12px; }
 .btn-sm.danger { color: var(--danger); border-color: var(--danger); }
 .btn-sm.danger:hover { background: rgba(224,85,85,0.1); }
+
+/* Rating */
+.rating-panel {
+  background: var(--bg-surface); border: 1px solid var(--accent);
+  border-radius: var(--radius); padding: 18px 20px; margin-bottom: 20px;
+}
+.rating-panel.rated { border-color: var(--border-color); }
+
+.rating-title { font-size: 15px; font-weight: 600; }
+.rating-sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; margin-bottom: 14px; }
+
+.score-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.score-btn {
+  width: 36px; height: 36px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color); background: var(--bg-elevated);
+  color: var(--text-primary); font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: all 0.15s;
+}
+.score-btn:hover { border-color: var(--accent); }
+.score-btn.selected { background: var(--accent); border-color: var(--accent); color: #12131a; }
+
+.rating-comment-input { width: 100%; resize: vertical; margin-bottom: 12px; }
+
+.rating-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.rating-error { color: var(--danger); font-size: 12px; }
+
+.rating-score-badge {
+  display: inline-block; margin-left: 8px; padding: 2px 10px; border-radius: 999px;
+  background: rgba(232,160,32,0.15); color: var(--accent); font-size: 13px; font-weight: 700;
+}
+.rating-comment-display { font-size: 13px; color: var(--text-secondary); margin-top: 8px; font-style: italic; }
 
 /* Layout */
 .chat-layout { display: grid; grid-template-columns: 280px 1fr; gap: 20px; height: calc(100vh - 240px); min-height: 500px; }

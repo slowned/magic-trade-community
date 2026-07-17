@@ -9,6 +9,7 @@ import Wishlist from '@/views/Wishlist.vue'
 import Cart from '@/views/Cart.vue'
 import OrderChat from '@/views/OrderChat.vue'
 import Profile from '@/views/Profile.vue'
+import UserPublicProfile from '@/views/UserPublicProfile.vue'
 import Explore from '@/views/Explore.vue'
 import SearchResults from '@/views/SearchResults.vue'
 import Scanner from '@/views/Scanner.vue'
@@ -69,6 +70,13 @@ const routes = [
     name: 'Profile',
     component: Profile,
     meta: { requiresAuth: true },
+  },
+  {
+    path: '/user/:username',
+    name: 'UserPublicProfile',
+    component: UserPublicProfile,
+    props: true,
+    meta: { requiresAuth: false },
   },
   {
     path: '/carpetas',

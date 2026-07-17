@@ -5,7 +5,7 @@ from rest_framework.test import APITestCase
 
 from binders.models import Binder, BinderCard
 from cards.models import Card
-from carts.models import Cart, CartItem, Order
+from carts.models import Cart, CartItem, Order, Rating
 
 
 class CartViewSetTestCase(APITestCase):
@@ -178,6 +178,61 @@ class OrderStatusTestCase(APITestCase):
     def test_outsider_cannot_see_or_update_order(self):
         response = self._set_status(self.other, 'shipped')
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class RatingTestCase(APITestCase):
+    def setUp(self):
+        self.buyer = User.objects.create_user(username="buyer", password="testpassword")
+        self.seller = User.objects.create_user(username="seller", password="testpassword")
+        card = Card.objects.create(
+            id="1", name="Card One", set_name="Set", color_identity="R",
+            uri="uri1", scryfall_uri="scryfall_uri1", image_uri="http://image1.com",
+        )
+        self.cart = Cart.objects.create(buyer=self.buyer, seller=self.seller, is_finalized=True)
+        CartItem.objects.create(cart=self.cart, card=card, quantity=3)
+        self.order = Order.objects.create(cart=self.cart, shipping_method='door_to_door', status='completed')
+
+    def _rate(self, user, score, comment=''):
+        self.client.force_authenticate(user=user)
+        url = reverse("carts:carts-rate", args=[self.cart.pk])
+        return self.client.post(url, {'score': score, 'comment': comment}, format="json")
+
+    def test_buyer_can_rate_completed_order(self):
+        response = self._rate(self.buyer, 9, comment='Todo perfecto')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        rating = Rating.objects.get(order=self.order)
+        self.assertEqual(rating.score, 9)
+        self.assertEqual(rating.rater, self.buyer)
+        self.assertEqual(rating.ratee, self.seller)
+        self.assertEqual(response.data['order']['rating']['score'], 9)
+
+    def test_seller_cannot_rate(self):
+        response = self._rate(self.seller, 5)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_cannot_rate_pending_order(self):
+        self.order.status = 'pending'
+        self.order.save()
+        response = self._rate(self.buyer, 8)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cannot_rate_twice(self):
+        self._rate(self.buyer, 9)
+        response = self._rate(self.buyer, 2)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Rating.objects.get(order=self.order).score, 9)
+
+    def test_score_out_of_range_rejected(self):
+        self.assertEqual(self._rate(self.buyer, 11).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self._rate(self.buyer, -1).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self._rate(self.buyer, 'diez').status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_zero_is_a_valid_score(self):
+        response = self._rate(self.buyer, 0)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Rating.objects.get(order=self.order).score, 0)
 
 
 class CartMessagesTestCase(APITestCase):

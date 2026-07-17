@@ -5,6 +5,8 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
 from binders.models import Binder
+from cards.models import Card
+from carts.models import Cart, CartItem, Order, Rating
 from users.serializers import UserSerializer
 
 
@@ -66,3 +68,64 @@ class UserViewSetTestCase(APITestCase):
         self.assertIn(self.binder2.name, binder_names)
 
         self.assertNotIn(self.binder3.name, binder_names)
+
+
+class PublicProfileTestCase(APITestCase):
+    def setUp(self):
+        self.seller = User.objects.create_user(username="seller", password="password123")
+        self.buyer1 = User.objects.create_user(username="buyer1", password="password123")
+        self.buyer2 = User.objects.create_user(username="buyer2", password="password123")
+        self.card = Card.objects.create(
+            id="1", name="Card One", set_name="Set", color_identity="R",
+            uri="uri1", scryfall_uri="scryfall_uri1", image_uri="http://image1.com",
+        )
+        Binder.objects.create(user=self.seller, name="Public binder", is_public=True)
+        Binder.objects.create(user=self.seller, name="Private binder", is_public=False)
+
+    def _completed_sale(self, buyer, quantity, score=None, comment=''):
+        cart = Cart.objects.create(buyer=buyer, seller=self.seller, is_finalized=True)
+        CartItem.objects.create(cart=cart, card=self.card, quantity=quantity)
+        order = Order.objects.create(cart=cart, shipping_method='door_to_door', status='completed')
+        if score is not None:
+            Rating.objects.create(order=order, rater=buyer, ratee=self.seller, score=score, comment=comment)
+        return order
+
+    def test_public_profile_is_accessible_without_auth(self):
+        url = reverse('users:user-public-profile', kwargs={'username': 'seller'})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_public_profile_stats(self):
+        self._completed_sale(self.buyer1, quantity=3, score=10, comment='Excelente')
+        self._completed_sale(self.buyer2, quantity=2, score=7)
+        # Pending order should not count as a successful trade nor as cards sold
+        cart = Cart.objects.create(buyer=self.buyer1, seller=self.seller, is_finalized=True)
+        CartItem.objects.create(cart=cart, card=self.card, quantity=5)
+        Order.objects.create(cart=cart, shipping_method='door_to_door', status='pending')
+
+        url = reverse('users:user-public-profile', kwargs={'username': 'seller'})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['rating_avg'], 8.5)
+        self.assertEqual(response.data['rating_count'], 2)
+        self.assertEqual(response.data['successful_trades'], 2)
+        self.assertEqual(response.data['cards_sold'], 5)
+        binder_names = [b['name'] for b in response.data['binders']]
+        self.assertEqual(binder_names, ['Public binder'])
+        self.assertEqual(len(response.data['recent_ratings']), 2)
+
+    def test_public_profile_counts_purchases_as_successful_trades(self):
+        self._completed_sale(self.buyer1, quantity=1, score=9)
+
+        url = reverse('users:user-public-profile', kwargs={'username': 'buyer1'})
+        response = self.client.get(url)
+
+        self.assertEqual(response.data['successful_trades'], 1)
+        self.assertEqual(response.data['cards_sold'], 0)
+        self.assertIsNone(response.data['rating_avg'])
+
+    def test_public_profile_unknown_user_404(self):
+        url = reverse('users:user-public-profile', kwargs={'username': 'ghost'})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
