@@ -17,7 +17,7 @@ from binders.serializers import (
     ImportMoxfieldSerializer,
     WishlistCardSerializer,
 )
-from cards.models import Card
+from cards.models import CONDITION_CHOICES, LANGUAGE_CHOICES, Card
 from cards.serializers import CardSerializer
 from mtg_trade_community.scryfall import CardNotFound, Scryfall, ScryfallRequestError
 
@@ -28,6 +28,7 @@ def _card_defaults(data):
         'name': data['name'],
         'set_name': data.get('set_name', ''),
         'set_code': data.get('set', ''),
+        'collector_number': data.get('collector_number', ''),
         'color_identity': ','.join(data.get('color_identity', [])),
         'type_line': data.get('type_line', ''),
         'uri': data.get('uri', ''),
@@ -37,6 +38,46 @@ def _card_defaults(data):
         'price_usd_foil': data.get('prices', {}).get('usd_foil') or None,
         'price_usd_etched': data.get('prices', {}).get('usd_etched') or None,
     }
+
+
+CONDITION_CODES = {code for code, _ in CONDITION_CHOICES}
+LANGUAGE_CODES = {code for code, _ in LANGUAGE_CHOICES}
+
+# Moxfield exports spell condition and language out in English.
+MOXFIELD_CONDITIONS = {
+    'mint': 'NM',
+    'near mint': 'NM',
+    'lightly played': 'SP',
+    'slightly played': 'SP',
+    'good (lightly played)': 'SP',
+    'moderately played': 'MP',
+    'played': 'MP',
+    'heavily played': 'HP',
+    'damaged': 'DMG',
+}
+MOXFIELD_LANGUAGES = {
+    'english': 'EN',
+    'spanish': 'ES',
+    'portuguese': 'PT',
+    'french': 'FR',
+    'german': 'DE',
+    'italian': 'IT',
+    'japanese': 'JA',
+    'korean': 'KO',
+    'russian': 'RU',
+    'chinese simplified': 'ZHS',
+    'simplified chinese': 'ZHS',
+    'chinese traditional': 'ZHT',
+    'traditional chinese': 'ZHT',
+}
+
+
+def _moxfield_code(value, mapping, codes, default):
+    """Accept either Moxfield's English label or one of our own codes."""
+    value = str(value or '').strip()
+    if value.upper() in codes:
+        return value.upper()
+    return mapping.get(value.lower(), default)
 
 
 def _fetch_or_get_cards(names):
@@ -91,7 +132,7 @@ def _fetch_or_get_cards(names):
 
 
 class BinderViewSet(ModelViewSet):
-    queryset = Binder.objects.all().select_related('user')
+    queryset = Binder.objects.all().select_related('user').prefetch_related('bindercard_set__card')
     serializer_class = BinderSerializer
     authentication_classes = [OptionalJWTAuthentication]
 
@@ -126,7 +167,9 @@ class BinderViewSet(ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='my-binders')
     def my_binders(self, request):
-        binders = Binder.objects.filter(user=request.user).select_related('user')
+        binders = Binder.objects.filter(user=request.user).select_related(
+            'user'
+        ).prefetch_related('bindercard_set__card')
         return Response(BinderSerializer(binders, many=True).data)
 
     @action(detail=True, methods=['post'], url_path='add-cards')
@@ -146,7 +189,9 @@ class BinderViewSet(ModelViewSet):
             card = cards_by_name.get(name.strip().lower())
             if not card:
                 continue
-            bc, _ = BinderCard.objects.get_or_create(binder=binder, card=card, defaults={'quantity': 0})
+            bc, _ = BinderCard.objects.get_or_create(
+                binder=binder, card=card, condition='NM', language='EN', defaults={'quantity': 0},
+            )
             bc.quantity += 1
             bc.save()
             added.append(card.name)
@@ -159,7 +204,9 @@ class BinderViewSet(ModelViewSet):
         Add a specific card printing by its Scryfall UUID.
         Fetches the card from Scryfall if it's not already in the DB.
 
-        Body: { "card_id": "<scryfall-uuid>" }
+        Body: { "card_id": "<scryfall-uuid>", "quantity": 1, "condition": "NM", "language": "EN" }
+        quantity, condition and language are optional (defaults 1 / NM / EN). A
+        copy in a condition/language the binder doesn't hold yet gets its own row.
         """
         from mtg_trade_community.scryfall import Scryfall, CardNotFound, ScryfallRequestError
 
@@ -169,6 +216,20 @@ class BinderViewSet(ModelViewSet):
         card_id = request.data.get('card_id', '').strip()
         if not card_id:
             return Response({'error': 'card_id requerido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            quantity = int(request.data.get('quantity', 1))
+        except (TypeError, ValueError):
+            quantity = 0
+        if not 1 <= quantity <= 999:
+            return Response({'error': 'La cantidad debe ser entre 1 y 999.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        condition = str(request.data.get('condition') or 'NM').upper()
+        if condition not in CONDITION_CODES:
+            return Response({'error': 'Condición inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+        language = str(request.data.get('language') or 'EN').upper()
+        if language not in LANGUAGE_CODES:
+            return Response({'error': 'Idioma inválido.'}, status=status.HTTP_400_BAD_REQUEST)
 
         card = Card.objects.filter(id=card_id).first()
         if not card:
@@ -180,10 +241,18 @@ class BinderViewSet(ModelViewSet):
             except ScryfallRequestError as e:
                 return Response({'error': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
-        bc, _ = BinderCard.objects.get_or_create(binder=binder, card=card, defaults={'quantity': 0})
-        bc.quantity += 1
+        bc, _ = BinderCard.objects.get_or_create(
+            binder=binder, card=card, condition=condition, language=language, defaults={'quantity': 0},
+        )
+        bc.quantity += quantity
         bc.save()
-        return Response({'added': card.name, 'card': CardSerializer(card).data})
+        return Response({
+            'added': card.name,
+            'quantity': quantity,
+            'condition': bc.condition,
+            'language': bc.language,
+            'card': CardSerializer(card).data,
+        })
 
     @action(detail=True, methods=['post'], url_path='import-moxfield')
     def import_moxfield(self, request, pk=None):
@@ -209,16 +278,20 @@ class BinderViewSet(ModelViewSet):
             except (ValueError, TypeError):
                 quantity = 1
             foil = str(row.get('Foil', '')).strip().lower() in ('yes', 'true', '1', 'foil')
-            rows.append((name, quantity, foil))
+            condition = _moxfield_code(row.get('Condition'), MOXFIELD_CONDITIONS, CONDITION_CODES, 'NM')
+            language = _moxfield_code(row.get('Language'), MOXFIELD_LANGUAGES, LANGUAGE_CODES, 'EN')
+            rows.append((name, quantity, foil, condition, language))
 
-        cards_by_name, not_found = _fetch_or_get_cards([name for name, _, _ in rows])
+        cards_by_name, not_found = _fetch_or_get_cards([row[0] for row in rows])
 
         added = []
-        for name, quantity, foil in rows:
+        for name, quantity, foil, condition, language in rows:
             card = cards_by_name.get(name.lower())
             if not card:
                 continue
-            bc, _ = BinderCard.objects.get_or_create(binder=binder, card=card, defaults={'quantity': 0})
+            bc, _ = BinderCard.objects.get_or_create(
+                binder=binder, card=card, condition=condition, language=language, defaults={'quantity': 0},
+            )
             bc.quantity += quantity
             bc.foil = bc.foil or foil
             bc.save()
@@ -237,16 +310,19 @@ class BinderViewSet(ModelViewSet):
 
         removed = []
         for name in serializer.validated_data['card_names']:
-            try:
-                bc = BinderCard.objects.get(binder=binder, card__name__iexact=name.strip())
-                if bc.quantity > 1:
-                    bc.quantity -= 1
-                    bc.save()
-                else:
-                    bc.delete()
-                removed.append(name)
-            except BinderCard.DoesNotExist:
+            # A name can match several rows (other printings, conditions or
+            # languages); take one copy from the oldest.
+            bc = BinderCard.objects.filter(
+                binder=binder, card__name__iexact=name.strip(),
+            ).order_by('pk').first()
+            if not bc:
                 continue
+            if bc.quantity > 1:
+                bc.quantity -= 1
+                bc.save()
+            else:
+                bc.delete()
+            removed.append(name)
 
         return Response({'removed': removed})
 

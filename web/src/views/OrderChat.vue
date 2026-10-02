@@ -16,7 +16,7 @@
           </div>
           <div class="order-meta">
             <span :class="['status-badge', cart.order.status]">{{ cart.order.status_display }}</span>
-            <span class="shipping-badge">{{ cart.order.shipping_method_display }}</span>
+            <span class="shipping-badge">{{ shippingLabel }}</span>
             <span class="order-total">${{ cart.total_usd.toFixed(2) }}</span>
           </div>
         </div>
@@ -125,7 +125,7 @@
                 <div class="timeline-body">
                   <div class="timeline-label">Enviado</div>
                   <div class="timeline-sub muted" v-if="!['shipped','completed'].includes(cart.order.status)">Pendiente</div>
-                  <div class="timeline-sub" v-else>{{ cart.order.shipping_method_display }}</div>
+                  <div class="timeline-sub" v-else>{{ shippingLabel }}</div>
                 </div>
               </div>
               <div :class="['timeline-step', { done: cart.order.status === 'completed', cancelled: cart.order.status === 'cancelled' }]">
@@ -219,6 +219,10 @@ export default {
     currentUsername() { return this.currentUser?.username; },
     isBuyer() { return this.cart?.buyer === this.currentUsername; },
     isSeller() { return this.cart?.seller === this.currentUsername; },
+    // Checkout no longer asks for a shipping method — it gets agreed here.
+    shippingLabel() {
+      return this.cart?.order?.shipping_method_display || 'Envío a coordinar';
+    },
   },
   data() {
     return {

@@ -13,6 +13,9 @@ import UserPublicProfile from '@/views/UserPublicProfile.vue'
 import Explore from '@/views/Explore.vue'
 import SearchResults from '@/views/SearchResults.vue'
 import Scanner from '@/views/Scanner.vue'
+import Auctions from '@/views/Auctions.vue'
+import AuctionDetail from '@/views/AuctionDetail.vue'
+import AuctionAdmin from '@/views/AuctionAdmin.vue'
 
 const routes = [
   {
@@ -96,6 +99,25 @@ const routes = [
     component: Scanner,
     meta: { requiresAuth: true },
   },
+  {
+    path: '/subastas',
+    name: 'Auctions',
+    component: Auctions,
+    meta: { requiresAuth: false },
+  },
+  {
+    path: '/subastas/admin',
+    name: 'AuctionAdmin',
+    component: AuctionAdmin,
+    meta: { requiresAuth: true, requiresStaff: true },
+  },
+  {
+    path: '/subasta/:id',
+    name: 'AuctionDetail',
+    component: AuctionDetail,
+    props: true,
+    meta: { requiresAuth: false },
+  },
 ]
 
 const router = createRouter({
@@ -108,6 +130,9 @@ router.beforeEach((to, from, next) => {
 
   if (to.meta.requiresAuth && !isAuthenticated) {
     next({ name: 'Login' });
+  } else if (to.meta.requiresStaff && !store.getters.isStaff) {
+    // Only the platform account runs auctions for now.
+    next({ name: 'Auctions' });
   } else if (to.name === 'Login' && isAuthenticated) {
     next({ name: 'Home' });
   } else {

@@ -2,10 +2,9 @@
   <div class="landing">
 
     <!-- ══════════════════ HERO ══════════════════ -->
-    <section class="hero">
-      <!-- Background art: Etali -->
-      <div class="hero-art-bg"></div>
-      <div class="hero-overlay"></div>
+    <section class="hero" :class="{ 'has-feature': !!featured }">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="hero-grid-lines" aria-hidden="true"></div>
 
       <div class="hero-content container">
         <!-- LEFT: copy + search -->
@@ -16,15 +15,19 @@
             <span class="gradient-text">TCG Argentina</span>
           </h1>
           <p class="hero-subtitle">
-            Comprá y vendé cartas P2P. Sin comisiones, sin intermediarios.<br>
+            Comprá y vendé cartas P2P, o pujá en las subastas semanales.
             Trato directo entre coleccionistas.
           </p>
 
           <div class="hero-search-wrap">
+            <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+            </svg>
             <input
               v-model="searchQuery"
               @keyup.enter="handleSearch"
-              placeholder="Buscá una carta… Black Lotus, Lightning Bolt, Mox Ruby…"
+              placeholder="Buscá una carta… Black Lotus, Lightning Bolt…"
+              aria-label="Buscar carta"
             />
             <button @click="handleSearch">Buscar</button>
           </div>
@@ -33,82 +36,74 @@
             <router-link v-if="!isAuthenticated" to="/register">
               <button class="btn-cta-gold">Crear cuenta gratis</button>
             </router-link>
+            <router-link to="/subastas">
+              <button class="btn-cta-ghost">Ver subastas →</button>
+            </router-link>
             <router-link to="/carpetas">
-              <button class="btn-cta-ghost">Explorar carpetas →</button>
+              <button class="btn-cta-plain">Explorar carpetas</button>
             </router-link>
           </div>
         </div>
 
-        <!-- RIGHT: floating cards -->
-        <div class="hero-right" aria-hidden="true">
-          <div class="cards-stage">
-            <!-- Card 3 — back left -->
-            <div class="card-wrap card-wrap-3">
-              <div class="card-tilt c3">
-                <img
-                  src="https://api.scryfall.com/cards/named?exact=Black+Lotus&format=image&version=normal"
-                  alt="Black Lotus"
-                  class="card-img"
-                  loading="lazy"
-                />
-              </div>
+        <!-- RIGHT: the auction closing soonest, so it lands above the fold -->
+        <aside v-if="featured" class="hero-feature">
+          <router-link :to="`/subasta/${featured.id}`" class="feature-card">
+            <div class="feature-head">
+              <span class="feature-eyebrow">
+                <span class="live-dot" :class="{ scheduled: featured.status === 'scheduled' }"></span>
+                {{ featured.status === 'scheduled' ? 'Próxima subasta' : 'Subasta en curso' }}
+              </span>
+              <span class="feature-timer" :class="featuredUrgency">{{ featuredTimer }}</span>
             </div>
-            <!-- Card 2 — center -->
-            <div class="card-wrap card-wrap-2">
-              <div class="card-tilt c2">
-                <img
-                  src="https://api.scryfall.com/cards/named?exact=Urza%2C+Lord+High+Artificer&format=image&version=normal"
-                  alt="Urza"
-                  class="card-img"
-                  loading="lazy"
-                />
-              </div>
-            </div>
-            <!-- Card 1 — front right -->
-            <div class="card-wrap card-wrap-1">
-              <div class="card-tilt c1">
-                <img
-                  src="https://api.scryfall.com/cards/named?exact=Etali%2C+Primal+Storm&format=image&version=normal"
-                  alt="Etali"
-                  class="card-img"
-                  loading="lazy"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <!-- Scroll hint -->
-      <div class="scroll-hint">
-        <div class="scroll-dot"></div>
+            <div class="feature-body">
+              <img
+                v-if="featured.display_image"
+                :src="featured.display_image"
+                :alt="featured.display_title"
+                class="feature-img"
+              />
+              <div class="feature-info">
+                <h2 class="feature-title">{{ featured.display_title }}</h2>
+                <p class="feature-meta">{{ featured.card.set_name }} · {{ featured.condition_display }}</p>
+
+                <span class="feature-price-label">
+                  {{ featured.bid_count ? 'Oferta actual' : 'Precio inicial' }}
+                </span>
+                <span class="feature-price">{{ formatArs(featured.current_price) }}</span>
+                <span class="feature-bids">
+                  {{ featured.bid_count }} {{ featured.bid_count === 1 ? 'puja' : 'pujas' }}
+                </span>
+
+                <span class="feature-cta">Ofertar →</span>
+              </div>
+            </div>
+          </router-link>
+        </aside>
       </div>
     </section>
 
-    <!-- ══════════════════ STATS ══════════════════ -->
-    <div class="stats-strip">
-      <div class="container stats-inner">
-        <div class="stat-item">
-          <span class="stat-v">10,000+</span>
-          <span class="stat-l">Cartas en la plataforma</span>
+    <!-- ══════════════════ SUBASTAS ACTIVAS ══════════════════ -->
+    <section v-if="restAuctions.length" class="auctions-strip">
+      <div class="container">
+        <div class="strip-head">
+          <div>
+            <p class="eyebrow">Cerrando pronto</p>
+            <h2 class="section-h tight">Subastas activas</h2>
+          </div>
+          <router-link to="/subastas" class="see-all">Ver todas →</router-link>
         </div>
-        <span class="stat-sep">·</span>
-        <div class="stat-item">
-          <span class="stat-v">P2P</span>
-          <span class="stat-l">Sin intermediarios</span>
-        </div>
-        <span class="stat-sep">·</span>
-        <div class="stat-item">
-          <span class="stat-v">Gratis</span>
-          <span class="stat-l">Sin comisiones</span>
-        </div>
-        <span class="stat-sep">·</span>
-        <div class="stat-item">
-          <span class="stat-v">Argentina</span>
-          <span class="stat-l">Comunidad local</span>
+
+        <div class="strip-grid">
+          <AuctionCard
+            v-for="auction in restAuctions"
+            :key="auction.id"
+            :auction="auction"
+            dark
+          />
         </div>
       </div>
-    </div>
+    </section>
 
     <!-- ══════════════════ FEATURES ══════════════════ -->
     <section class="features">
@@ -129,31 +124,15 @@
             <p>Armá pedidos directo con el vendedor. Sin fees. Trato 100% entre coleccionistas.</p>
           </div>
           <div class="feat-card">
+            <div class="feat-icon purple">🔨</div>
+            <h3>Subastas</h3>
+            <p>Cargás tu oferta máxima y pujamos por vos. Abren los viernes y cierran el viernes siguiente.</p>
+          </div>
+          <div class="feat-card">
             <div class="feat-icon green">💬</div>
             <h3>Chat integrado</h3>
             <p>Coordiná envío y pago por chat. Puerta a puerta o retiro en sucursal.</p>
           </div>
-          <div class="feat-card">
-            <div class="feat-icon red">❤️</div>
-            <h3>Wishlist</h3>
-            <p>Guardá las cartas que querés conseguir y organizá tu colección objetivo.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ══════════════════ URZA BANNER ══════════════════ -->
-    <section class="character-banner">
-      <div class="banner-art-bg"></div>
-      <div class="banner-overlay"></div>
-      <div class="container banner-content">
-        <div class="banner-text">
-          <p class="eyebrow-light">Comunidad de coleccionistas</p>
-          <h2>Encontrá lo que<br>necesitás hoy</h2>
-          <p class="banner-sub">Miles de cartas disponibles en binders públicos. Buscá, comprá, coordiná el envío.</p>
-          <router-link to="/carpetas">
-            <button class="btn-cta-gold">Explorar carpetas</button>
-          </router-link>
         </div>
       </div>
     </section>
@@ -189,11 +168,6 @@
     <section class="cta-section" v-if="!isAuthenticated">
       <div class="container">
         <div class="cta-box">
-          <div class="cta-deco" aria-hidden="true">
-            <div class="d-card d1"></div>
-            <div class="d-card d2"></div>
-            <div class="d-card d3"></div>
-          </div>
           <div class="cta-body">
             <h2>¿Tenés cartas para vender?</h2>
             <p>Creá tu binder gratis y empezá a vender a otros coleccionistas hoy mismo.</p>
@@ -215,16 +189,55 @@
 
 <script>
 import { mapGetters } from 'vuex';
+import AuctionCard from '@/components/AuctionCard.vue';
+import BinderService from '@/services/BinderService';
+import { formatArs, formatCountdown, urgencyClass } from '@/utils/auction';
 
 export default {
   name: 'HomeView',
+  components: { AuctionCard },
   computed: {
     ...mapGetters(['isAuthenticated']),
+    /** Spotlight the one closing soonest — a live auction beats a scheduled one. */
+    featured() {
+      return this.auctions.find(a => a.status === 'live') || this.auctions[0] || null;
+    },
+    restAuctions() {
+      return this.auctions.filter(a => a.id !== this.featured?.id).slice(0, 4);
+    },
+    featuredTimer() {
+      if (!this.featured) return '';
+      if (this.featured.status === 'scheduled') return 'Pronto';
+      return `Cierra en ${formatCountdown(this.featured.seconds_left)}`;
+    },
+    featuredUrgency() {
+      return this.featured ? urgencyClass(this.featured.seconds_left) : 'normal';
+    },
   },
   data() {
-    return { searchQuery: '' };
+    return { searchQuery: '', auctions: [], tick: null };
+  },
+  created() {
+    this.fetchAuctions();
+    this.tick = setInterval(this.decrementCountdowns, 1000);
+  },
+  beforeUnmount() {
+    clearInterval(this.tick);
   },
   methods: {
+    formatArs,
+    fetchAuctions() {
+      // The API orders by ends_at, so the first ones are the ones closing next.
+      // A failure here just means the landing renders without the auction blocks.
+      BinderService.getAuctions({ status: 'open' })
+        .then(r => { this.auctions = r.data.slice(0, 5); })
+        .catch(() => { this.auctions = []; });
+    },
+    decrementCountdowns() {
+      this.auctions.forEach(a => {
+        if (a.seconds_left > 0) a.seconds_left -= 1;
+      });
+    },
     handleSearch() {
       const q = this.searchQuery.trim();
       if (!q) return;
@@ -236,56 +249,53 @@ export default {
 </script>
 
 <style scoped>
-.landing { overflow-x: hidden; }
+.landing { overflow-x: hidden; background: #0d0e17; }
 
-/* ── HERO ── */
+/* ══ HERO ══
+   Deliberately not 100vh: the fold has to reach the auctions below. */
 .hero {
   position: relative;
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
+  padding: 72px 0 80px;
   overflow: hidden;
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 0%, rgba(232,160,32,0.13), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 90% 20%, rgba(76,29,149,0.30), transparent 65%),
+    linear-gradient(180deg, #12132033 0%, #0d0e17 100%),
+    #0d0e17;
 }
 
-.hero-art-bg {
+.hero-glow {
   position: absolute;
-  inset: 0;
-  background-image: url('https://api.scryfall.com/cards/named?exact=Etali%2C+Primal+Storm&format=image&version=art_crop');
-  background-size: cover;
-  background-position: center 30%;
-  transform: scale(1.05);
-  animation: heroZoom 20s ease-in-out infinite alternate;
+  top: -180px; left: 50%;
+  width: 900px; height: 460px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(232,160,32,0.16), transparent 70%);
+  filter: blur(50px);
+  pointer-events: none;
 }
 
-@keyframes heroZoom {
-  from { transform: scale(1.05); }
-  to   { transform: scale(1.12); }
-}
-
-.hero-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    105deg,
-    rgba(10,10,20,0.97) 0%,
-    rgba(10,10,20,0.85) 45%,
-    rgba(10,10,20,0.3) 75%,
-    rgba(10,10,20,0.7) 100%
-  );
+/* Faint grid — gives the flat background some texture without a hosted image. */
+.hero-grid-lines {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.028) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 30%, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 30%, #000 30%, transparent 75%);
+  pointer-events: none;
 }
 
 .hero-content {
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 48px;
+  grid-template-columns: 1fr;
+  gap: 44px;
   align-items: center;
-  padding-top: 80px;
-  padding-bottom: 80px;
 }
+.hero.has-feature .hero-content { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); }
 
-/* Hero left */
 .hero-badge {
   display: inline-block;
   background: rgba(232,160,32,0.12);
@@ -296,15 +306,15 @@ export default {
   font-weight: 600;
   color: var(--accent);
   letter-spacing: 0.05em;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .hero-title {
-  font-size: clamp(42px, 6vw, 72px);
+  font-size: clamp(38px, 5vw, 60px);
   font-weight: 900;
   line-height: 1.05;
   color: #fff;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   letter-spacing: -0.03em;
 }
 
@@ -314,33 +324,39 @@ export default {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: shine 4s linear infinite;
+  animation: shine 5s linear infinite;
 }
 @keyframes shine { to { background-position: 200% center; } }
 
 .hero-subtitle {
   font-size: 16px;
-  color: rgba(255,255,255,0.65);
-  line-height: 1.7;
-  margin-bottom: 32px;
+  color: rgba(255,255,255,0.62);
+  line-height: 1.65;
+  margin-bottom: 26px;
+  max-width: 480px;
 }
 
 .hero-search-wrap {
   display: flex;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.15);
+  align-items: center;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
   border-radius: 12px;
-  padding: 5px 5px 5px 16px;
+  padding: 5px 5px 5px 14px;
   max-width: 520px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   backdrop-filter: blur(12px);
   transition: border-color 0.2s;
 }
 .hero-search-wrap:focus-within { border-color: var(--accent); }
 
+.search-icon { width: 16px; height: 16px; color: rgba(255,255,255,0.35); flex-shrink: 0; }
+
 .hero-search-wrap input {
-  flex: 1; background: transparent; border: none;
-  color: #fff; font-size: 14px; outline: none; padding: 10px 0;
+  flex: 1; min-width: 0;
+  background: transparent; border: none;
+  color: #fff; font-size: 14px; font-family: inherit;
+  outline: none; padding: 11px 10px;
 }
 .hero-search-wrap input::placeholder { color: rgba(255,255,255,0.35); }
 
@@ -353,119 +369,152 @@ export default {
 }
 .hero-search-wrap button:hover { background: #f0b840; }
 
-.hero-ctas { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.hero-ctas { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
 .btn-cta-gold {
   background: linear-gradient(135deg, #e8a020, #f0b840);
   color: #0d0e17; border: none; border-radius: 10px;
-  padding: 13px 28px; font-size: 15px; font-weight: 700;
+  padding: 12px 26px; font-size: 15px; font-weight: 700;
   cursor: pointer; font-family: inherit;
-  box-shadow: 0 0 28px rgba(232,160,32,0.4);
+  box-shadow: 0 6px 24px rgba(232,160,32,0.28);
   transition: transform 0.15s, box-shadow 0.15s;
 }
-.btn-cta-gold:hover { transform: translateY(-2px); box-shadow: 0 0 44px rgba(232,160,32,0.6); }
+.btn-cta-gold:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(232,160,32,0.44); }
 
 .btn-cta-ghost {
   background: transparent;
-  color: rgba(255,255,255,0.75);
+  color: rgba(255,255,255,0.78);
   border: 1px solid rgba(255,255,255,0.2);
-  border-radius: 10px; padding: 13px 24px;
+  border-radius: 10px; padding: 12px 22px;
   font-size: 15px; cursor: pointer; font-family: inherit;
   transition: background-color 0.15s, color 0.15s, border-color 0.15s;
 }
 .btn-cta-ghost:hover { background: rgba(255,255,255,0.07); color: #fff; border-color: rgba(255,255,255,0.4); }
 
-/* Hero right — card showcase */
-.hero-right {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.btn-cta-plain {
+  background: none; border: none;
+  color: rgba(255,255,255,0.5);
+  font-size: 14px; font-family: inherit; cursor: pointer;
+  padding: 12px 8px;
+  transition: color 0.15s;
 }
+.btn-cta-plain:hover { color: #fff; }
 
-.cards-stage {
-  position: relative;
-  width: 360px;
-  height: 480px;
-}
+/* ── Featured auction ── */
+.hero-feature { min-width: 0; }
 
-.card-wrap {
-  position: absolute;
-  animation: floatCard 5s ease-in-out infinite;
-}
-
-/* Each card positioned in a fan */
-.card-wrap-1 { top: 20px;  left: 160px; z-index: 3; animation-delay: 0s; }
-.card-wrap-2 { top: 40px;  left: 80px;  z-index: 2; animation-delay: 1.2s; }
-.card-wrap-3 { top: 60px;  left: 0px;   z-index: 1; animation-delay: 2.4s; }
-
-@keyframes floatCard {
-  0%, 100% { transform: translateY(0px); }
-  50%       { transform: translateY(-18px); }
-}
-
-.card-tilt { transition: transform 0.4s ease; }
-
-.c1 { transform: rotate(8deg); }
-.c2 { transform: rotate(-3deg); }
-.c3 { transform: rotate(-16deg); }
-
-.card-wrap:hover .card-tilt { transform: rotate(0deg) scale(1.05) translateY(-8px) !important; z-index: 10; }
-
-.card-img {
-  width: 155px;
-  border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+.feature-card {
   display: block;
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(232,160,32,0.24);
+  border-radius: 18px;
+  padding: 16px;
+  color: inherit;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 48px rgba(0,0,0,0.34);
+  transition: border-color 0.18s, transform 0.18s;
+}
+.feature-card:hover { border-color: rgba(232,160,32,0.55); transform: translateY(-3px); color: inherit; }
+
+.feature-head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 10px; margin-bottom: 14px;
 }
 
-/* Scroll hint */
-.scroll-hint {
-  position: absolute;
-  bottom: 28px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 3;
-}
-.scroll-dot {
-  width: 6px;
-  height: 6px;
-  background: rgba(255,255,255,0.4);
-  border-radius: 50%;
-  animation: scrollBounce 2s ease-in-out infinite;
-}
-@keyframes scrollBounce {
-  0%, 100% { transform: translateY(0); opacity: 0.4; }
-  50%       { transform: translateY(8px); opacity: 1; }
+.feature-eyebrow {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: rgba(255,255,255,0.62);
 }
 
-/* ── STATS ── */
-.stats-strip {
-  background: rgba(255,255,255,0.02);
-  border-bottom: 1px solid var(--border-color);
-  padding: 18px 0;
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 0 0 rgba(74,222,128,0.6);
+  animation: livePulse 2s ease-out infinite;
 }
-.stats-inner {
-  display: flex; align-items: center; justify-content: center;
-  gap: 24px; flex-wrap: wrap;
+.live-dot.scheduled { background: var(--accent); animation: none; }
+@keyframes livePulse {
+  70%  { box-shadow: 0 0 0 7px rgba(74,222,128,0); }
+  100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); }
 }
-.stat-item { display: flex; flex-direction: column; align-items: center; }
-.stat-v { font-size: 20px; font-weight: 800; color: var(--accent); letter-spacing: -0.02em; }
-.stat-l { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
-.stat-sep { color: var(--border-color); font-size: 20px; }
 
-/* ── FEATURES ── */
-.features { padding: 96px 0; background: #0d0e17; }
+.feature-timer {
+  font-size: 12px; font-weight: 700;
+  padding: 4px 10px; border-radius: 999px;
+  background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8);
+  white-space: nowrap;
+}
+.feature-timer.urgent { background: rgba(201,64,64,0.22); color: #ff9c9c; }
+.feature-timer.critical { background: #c94040; color: #fff; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.62; } }
 
+.feature-body { display: flex; gap: 16px; align-items: stretch; }
+
+.feature-img {
+  width: 132px; flex-shrink: 0;
+  border-radius: 10px; display: block;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.4);
+}
+
+.feature-info { display: flex; flex-direction: column; min-width: 0; }
+
+.feature-title {
+  font-size: 18px; font-weight: 800; color: #fff;
+  line-height: 1.2; letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.feature-meta { font-size: 11px; color: rgba(255,255,255,0.42); margin: 4px 0 14px; }
+
+.feature-price-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: rgba(255,255,255,0.42);
+}
+.feature-price {
+  font-size: 28px; font-weight: 900; color: var(--accent);
+  letter-spacing: -0.02em; line-height: 1.1;
+}
+.feature-bids { font-size: 11px; color: rgba(255,255,255,0.5); }
+
+.feature-cta {
+  margin-top: auto; padding-top: 14px;
+  font-size: 13px; font-weight: 700; color: var(--accent);
+}
+
+/* ══ SUBASTAS ACTIVAS ══ */
+.auctions-strip {
+  padding: 56px 0 64px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  background: linear-gradient(180deg, #0f101c, #0d0e17);
+}
+
+.strip-head {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 24px;
+}
+.see-all { font-size: 14px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+
+.strip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+  gap: 16px;
+}
+
+/* ══ SHARED SECTION HEADINGS ══ */
 .eyebrow {
   font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.14em; color: var(--accent); margin-bottom: 10px;
 }
 
 .section-h {
-  font-size: clamp(26px, 4vw, 42px); font-weight: 800;
-  color: var(--text-primary); line-height: 1.15;
-  margin-bottom: 52px; letter-spacing: -0.02em;
+  font-size: clamp(26px, 4vw, 40px); font-weight: 800;
+  color: #fff; line-height: 1.15;
+  margin-bottom: 48px; letter-spacing: -0.02em;
 }
+.section-h.tight { margin-bottom: 0; }
+
+/* ══ FEATURES ══ */
+.features { padding: 88px 0; background: #0d0e17; }
 
 .feat-grid {
   display: grid;
@@ -474,12 +523,13 @@ export default {
 }
 
 .feat-card {
-  background: var(--bg-surface); border: 1px solid var(--border-color);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 16px; padding: 26px; position: relative;
   transition: border-color 0.2s, transform 0.2s;
 }
 .feat-card:hover { border-color: rgba(232,160,32,0.35); transform: translateY(-4px); }
-.feat-card.gold { border-color: rgba(232,160,32,0.25); background: linear-gradient(135deg, rgba(232,160,32,0.04), var(--bg-surface)); }
+.feat-card.gold { border-color: rgba(232,160,32,0.25); background: linear-gradient(135deg, rgba(232,160,32,0.07), rgba(255,255,255,0.03)); }
 
 .feat-badge {
   position: absolute; top: -11px; left: 18px;
@@ -496,68 +546,23 @@ export default {
 .feat-icon.blue   { background: rgba(37,99,235,0.15); }
 .feat-icon.amber  { background: rgba(232,160,32,0.15); }
 .feat-icon.green  { background: rgba(76,175,125,0.15); }
-.feat-icon.red    { background: rgba(239,68,68,0.15); }
+.feat-icon.purple { background: rgba(124,58,237,0.18); }
 
-.feat-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
-.feat-card p  { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+.feat-card h3 { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+.feat-card p  { font-size: 13px; color: rgba(255,255,255,0.55); line-height: 1.6; }
 
-/* ── CHARACTER BANNER ── */
-.character-banner {
-  position: relative;
-  padding: 100px 0;
-  overflow: hidden;
-}
-
-.banner-art-bg {
-  position: absolute;
-  inset: 0;
-  background-image: url('https://api.scryfall.com/cards/named?exact=Urza%2C+Lord+High+Artificer&format=image&version=art_crop');
-  background-size: cover;
-  background-position: center;
-}
-
-.banner-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    90deg,
-    rgba(10,10,20,0.95) 0%,
-    rgba(10,10,20,0.7) 50%,
-    rgba(10,10,20,0.5) 100%
-  );
-}
-
-.banner-content { position: relative; z-index: 2; }
-
-.banner-text { max-width: 520px; }
-
-.eyebrow-light {
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.14em; color: rgba(232,160,32,0.8); margin-bottom: 10px;
-}
-
-.banner-text h2 {
-  font-size: clamp(32px, 5vw, 52px); font-weight: 900;
-  color: #fff; line-height: 1.1; margin-bottom: 16px;
-  letter-spacing: -0.02em;
-}
-
-.banner-sub { font-size: 15px; color: rgba(255,255,255,0.6); line-height: 1.7; margin-bottom: 28px; }
-
-/* ── STEPS ── */
-.steps-section { padding: 96px 0; background: linear-gradient(180deg, #0d0e17, #111220); }
+/* ══ STEPS ══ */
+.steps-section { padding: 88px 0; background: linear-gradient(180deg, #0d0e17, #111220); }
 
 .steps-grid {
   display: grid;
   grid-template-columns: 1fr auto 1fr auto 1fr;
-  gap: 0;
   align-items: start;
-  margin-top: 16px;
 }
 
 .step-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 16px; padding: 28px;
   transition: border-color 0.2s;
 }
@@ -569,8 +574,8 @@ export default {
   -webkit-text-stroke: 2px rgba(232,160,32,0.4);
   margin-bottom: 14px; line-height: 1;
 }
-.step-card h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
-.step-card p  { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+.step-card h3 { font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+.step-card p  { font-size: 13px; color: rgba(255,255,255,0.55); line-height: 1.6; }
 
 .step-arrow {
   display: flex; align-items: center; justify-content: center;
@@ -578,49 +583,47 @@ export default {
   font-size: 22px; color: rgba(232,160,32,0.3);
 }
 
-/* ── CTA ── */
-.cta-section { padding: 80px 0; background: #0d0e17; }
+/* ══ CTA ══ */
+.cta-section { padding: 72px 0 88px; background: #0d0e17; }
 
 .cta-box {
   position: relative;
-  background: linear-gradient(135deg, rgba(232,160,32,0.07) 0%, rgba(37,99,235,0.05) 100%);
+  background: linear-gradient(135deg, rgba(232,160,32,0.08) 0%, rgba(76,29,149,0.12) 100%);
   border: 1px solid rgba(232,160,32,0.2);
-  border-radius: 24px; padding: 64px;
+  border-radius: 24px; padding: 56px;
   overflow: hidden;
 }
 
-.cta-deco { position: absolute; inset: 0; pointer-events: none; }
-
-.d-card {
-  position: absolute;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.06);
-  background-size: 400% 400%;
-  animation: holoShift 12s ease infinite, floatCard 8s ease-in-out infinite;
-}
-.d1 { width: 100px; height: 140px; right: 8%;  top: -20px;  background: linear-gradient(135deg,#e8a020,#2563eb,#16a34a); opacity:0.25; transform:rotate(15deg); }
-.d2 { width: 75px;  height: 105px; right: 20%; bottom:-15px; background: linear-gradient(135deg,#2563eb,#7c3aed,#e8a020); opacity:0.18; transform:rotate(-10deg); animation-delay:3s; }
-.d3 { width: 60px;  height: 84px;  right: 13%; top:35%;     background: linear-gradient(135deg,#16a34a,#e8a020,#2563eb); opacity:0.12; transform:rotate(5deg); animation-delay:6s; }
-
-@keyframes holoShift {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
 .cta-body { position: relative; z-index: 2; max-width: 540px; }
-.cta-body h2 { font-size: clamp(24px,4vw,38px); font-weight: 800; margin-bottom: 12px; letter-spacing: -0.02em; }
-.cta-body p  { font-size: 15px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 28px; }
+.cta-body h2 { font-size: clamp(24px,4vw,36px); font-weight: 800; color: #fff; margin-bottom: 12px; letter-spacing: -0.02em; }
+.cta-body p  { font-size: 15px; color: rgba(255,255,255,0.6); line-height: 1.7; margin-bottom: 26px; }
 
 .cta-btns { display: flex; gap: 12px; flex-wrap: wrap; }
 
-/* ── RESPONSIVE ── */
-@media (max-width: 900px) {
-  .hero-content { grid-template-columns: 1fr; }
-  .hero-right { display: none; }
-  .steps-grid { grid-template-columns: 1fr; }
+/* ══ RESPONSIVE ══ */
+@media (max-width: 940px) {
+  .hero { padding: 52px 0 60px; }
+  .hero.has-feature .hero-content { grid-template-columns: 1fr; }
+  .hero-subtitle { max-width: none; }
+  .feature-card { max-width: 460px; }
+  .steps-grid { grid-template-columns: 1fr; gap: 14px; }
   .step-arrow { display: none; }
-  .cta-box { padding: 40px 24px; }
-  .cta-deco { display: none; }
+  .cta-box { padding: 36px 24px; }
+}
+
+@media (max-width: 560px) {
+  .hero-ctas { gap: 8px; }
+  .hero-ctas > * { flex: 1 1 auto; }
+  .hero-ctas button { width: 100%; }
+  .feature-body { gap: 12px; }
+  .feature-img { width: 104px; }
+  .feature-price { font-size: 24px; }
+  .strip-grid { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 12px; }
+}
+
+/* Perpetual motion is decorative here — respect the OS preference. */
+@media (prefers-reduced-motion: reduce) {
+  .gradient-text, .live-dot, .feature-timer.critical { animation: none; }
+  .feat-card:hover, .feature-card:hover, .btn-cta-gold:hover { transform: none; }
 }
 </style>

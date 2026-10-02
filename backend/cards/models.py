@@ -1,5 +1,29 @@
 from django.db import models
 
+# Shared card vocabulary. It lives here because both a binder copy and an
+# auction lot describe the same physical thing.
+CONDITION_CHOICES = [
+    ('NM', 'Near Mint'),
+    ('SP', 'Slightly Played'),
+    ('MP', 'Moderately Played'),
+    ('HP', 'Heavily Played'),
+    ('DMG', 'Damaged'),
+]
+
+LANGUAGE_CHOICES = [
+    ('EN', 'Inglés'),
+    ('ES', 'Español'),
+    ('PT', 'Portugués'),
+    ('FR', 'Francés'),
+    ('DE', 'Alemán'),
+    ('IT', 'Italiano'),
+    ('JA', 'Japonés'),
+    ('KO', 'Coreano'),
+    ('RU', 'Ruso'),
+    ('ZHS', 'Chino simplificado'),
+    ('ZHT', 'Chino tradicional'),
+]
+
 
 class Card(models.Model):
     id = models.CharField(max_length=255, primary_key=True)
@@ -7,6 +31,8 @@ class Card(models.Model):
     name = models.CharField(max_length=255, db_index=True)
     set_name = models.CharField(max_length=255)
     set_code = models.CharField(max_length=10, blank=True, default='')
+    # Printing number inside the set — what tells two reprints apart on a shelf.
+    collector_number = models.CharField(max_length=20, blank=True, default='')
     color_identity = models.CharField(max_length=255)
     type_line = models.CharField(max_length=255, blank=True, default='')
 

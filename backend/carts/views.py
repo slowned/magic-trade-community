@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.db.models import Q
 from rest_framework import status
 from rest_framework.decorators import action
@@ -6,10 +7,16 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from binders.models import BinderCard
 from cards.models import Card
 from carts.models import Cart, CartItem, Message, Order, Rating
 from carts.serializers import CartSerializer, MessageSerializer, OrderSerializer
+from carts.stock import (
+    StockUnavailable,
+    available_quantity,
+    deduct_for_checkout,
+    is_binder_sale,
+    restore_from_cancellation,
+)
 from mtg_trade_community.authentication import OptionalJWTAuthentication
 
 
@@ -75,7 +82,8 @@ class CartViewSet(GenericViewSet):
         except Card.DoesNotExist:
             return Response({'error': 'Carta no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
 
-        if not BinderCard.objects.filter(binder__user=seller, card=card, binder__is_public=True).exists():
+        available = available_quantity(seller, card.id)
+        if not available:
             return Response(
                 {'error': 'El vendedor ya no tiene esa carta disponible.'},
                 status=status.HTTP_409_CONFLICT
@@ -83,14 +91,29 @@ class CartViewSet(GenericViewSet):
 
         # Use the open (non-finalized) cart if one exists, else create a new one
         cart = Cart.objects.filter(
-            buyer=request.user, seller=seller, is_finalized=False
+            buyer=request.user, seller=seller, is_finalized=False,
+            source=Cart.SOURCE_BINDER,
         ).first()
+
+        item = CartItem.objects.filter(cart=cart, card=card).first() if cart else None
+        wanted = quantity + (item.quantity if item else 0)
+        # Nothing is reserved until checkout, so this cap is only a courtesy:
+        # it stops a buyer asking for copies the seller plainly doesn't have.
+        # Checked before the cart is touched, so a rejection leaves no empty cart.
+        if wanted > available:
+            return Response(
+                {
+                    'error': f'El vendedor tiene {available} copia(s) disponible(s).',
+                    'available': available,
+                },
+                status=status.HTTP_409_CONFLICT
+            )
 
         if not cart:
             cart = Cart.objects.create(buyer=request.user, seller=seller)
-
-        item, created = CartItem.objects.get_or_create(cart=cart, card=card)
-        item.quantity = item.quantity + quantity if not created else quantity
+        if not item:
+            item = CartItem(cart=cart, card=card)
+        item.quantity = wanted
         item.save()
 
         cart.refresh_from_db()
@@ -101,6 +124,12 @@ class CartViewSet(GenericViewSet):
         cart = self._buyer_qs().filter(pk=pk).first()
         if not cart:
             return Response({'error': 'Carrito no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if cart.source == Cart.SOURCE_AUCTION:
+            return Response(
+                {'error': 'No se pueden quitar cartas de un carrito de subasta.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         CartItem.objects.filter(cart=cart, card_id=request.data.get('card_id')).delete()
 
@@ -123,42 +152,45 @@ class CartViewSet(GenericViewSet):
         if hasattr(cart, 'order'):
             return Response({'error': 'Este carrito ya tiene un checkout.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        shipping_method = request.data.get('shipping_method')
-        if shipping_method not in ('door_to_door', 'branch_pickup'):
+        # Shipping is settled in the order chat, so checkout no longer asks for
+        # it. A client that still sends one has to send a real one.
+        shipping_method = request.data.get('shipping_method') or ''
+        if shipping_method and shipping_method not in ('door_to_door', 'branch_pickup'):
             return Response({'error': 'Método de envío inválido.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Verify all items are still available in the seller's binders (race-condition guard)
-        unavailable = []
-        for item in cart.items.select_related('card').all():
-            if not BinderCard.objects.filter(binder__user=cart.seller, card=item.card).exists():
-                unavailable.append({'id': item.card_id, 'name': item.card.name})
+        # First checkout wins. Locking the cart serializes double submissions of
+        # this cart; `deduct_for_checkout` locks the seller's binder rows, so two
+        # buyers racing for the same last copy can't both walk away with it.
+        try:
+            with transaction.atomic():
+                locked = Cart.objects.select_for_update().get(pk=cart.pk)
+                if Order.objects.filter(cart=locked).exists():
+                    return Response(
+                        {'error': 'Este carrito ya tiene un checkout.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-        if unavailable:
+                if is_binder_sale(locked):
+                    deduct_for_checkout(locked)
+
+                Order.objects.create(
+                    cart=locked,
+                    shipping_method=shipping_method,
+                    shipping_cost=request.data.get('shipping_cost') or None,
+                    notes=request.data.get('notes', ''),
+                )
+                locked.is_finalized = True
+                locked.save(update_fields=['is_finalized'])
+        except StockUnavailable as exc:
             return Response(
                 {
                     'error': 'Algunas cartas ya no están disponibles.',
-                    'unavailable_cards': unavailable,
+                    'unavailable_cards': exc.unavailable,
                 },
                 status=status.HTTP_409_CONFLICT
             )
 
-        order = Order.objects.create(
-            cart=cart,
-            shipping_method=shipping_method,
-            shipping_cost=request.data.get('shipping_cost') or None,
-            notes=request.data.get('notes', ''),
-        )
-        cart.is_finalized = True
-        cart.save()
-
-        # Remove sold cards from the seller's binder(s)
-        card_ids = [item.card_id for item in cart.items.all()]
-        BinderCard.objects.filter(
-            binder__user=cart.seller,
-            card_id__in=card_ids,
-        ).delete()
-
-        cart.refresh_from_db()
+        cart = self._buyer_qs().get(pk=cart.pk)
         return Response(CartSerializer(cart).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], url_path='upload-payment')
@@ -196,9 +228,15 @@ class CartViewSet(GenericViewSet):
         if new_status in ('completed', 'cancelled') and cart.buyer != request.user:
             return Response({'error': 'Solo el comprador puede marcar como completado o cancelado.'}, status=status.HTTP_403_FORBIDDEN)
 
-        order.status = new_status
-        order.save()
-        cart.refresh_from_db()
+        # Cancelling releases the copies the checkout took, back into the very
+        # binders they came from. Auction carts never took any.
+        with transaction.atomic():
+            if new_status == 'cancelled' and order.status != 'cancelled' and is_binder_sale(cart):
+                restore_from_cancellation(cart)
+            order.status = new_status
+            order.save(update_fields=['status', 'updated_at'])
+
+        cart = self._participant_cart(pk)
         return Response(CartSerializer(cart).data)
 
     @action(detail=True, methods=['post'], url_path='rate')

@@ -2,10 +2,10 @@
   <div class="cart-page container">
     <div class="page-header">
       <div class="tabs">
-        <button :class="['tab', { active: view === 'buying' }]" @click="view = 'buying'">
+        <button :class="['tab', { active: view === 'buying' }]" @click="selectView('buying')">
           Comprando ({{ carts.length }})
         </button>
-        <button :class="['tab', { active: view === 'selling' }]" @click="switchToSelling">
+        <button :class="['tab', { active: view === 'selling' }]" @click="selectView('selling')">
           Ventas ({{ sellingCarts.length }})
         </button>
       </div>
@@ -133,28 +133,13 @@
         </div>
 
         <div class="form-group">
-          <label>Método de envío</label>
-          <div class="shipping-options">
-            <label class="shipping-option" :class="{ active: checkoutForm.shipping_method === 'door_to_door' }">
-              <input type="radio" v-model="checkoutForm.shipping_method" value="door_to_door" />
-              <div class="shipping-info">
-                <span class="shipping-name">🚚 Puerta a puerta</span>
-                <span class="shipping-desc">El vendedor envía a tu domicilio</span>
-              </div>
-            </label>
-            <label class="shipping-option" :class="{ active: checkoutForm.shipping_method === 'branch_pickup' }">
-              <input type="radio" v-model="checkoutForm.shipping_method" value="branch_pickup" />
-              <div class="shipping-info">
-                <span class="shipping-name">🏪 Retiro en sucursal</span>
-                <span class="shipping-desc">Coordinan punto de retiro o correo</span>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <div class="form-group">
           <label>Notas al vendedor (opcional)</label>
           <textarea v-model="checkoutForm.notes" placeholder="Dirección, horarios, consultas..." rows="3" />
+        </div>
+
+        <div class="next-step-notice">
+          💬 Al confirmar se abre el chat con <strong>{{ checkoutCart.seller }}</strong>, donde coordinan
+          el envío y el pago.
         </div>
 
         <div class="trust-notice">
@@ -165,14 +150,19 @@
         <div v-if="unavailableCards.length" class="unavailable-cards">
           <div class="unavailable-title">Cartas que ya no están disponibles:</div>
           <ul>
-            <li v-for="card in unavailableCards" :key="card.id">{{ card.name }}</li>
+            <li v-for="card in unavailableCards" :key="card.id">
+              {{ card.name }}
+              <span v-if="card.available" class="unavailable-detail">
+                — pediste {{ card.requested }}, quedan {{ card.available }}
+              </span>
+            </li>
           </ul>
           <div class="unavailable-hint">Removelas del carrito para continuar.</div>
         </div>
 
         <div class="modal-actions">
           <button class="btn-ghost" @click="checkoutCart = null">Cancelar</button>
-          <button class="btn-primary" @click="confirmCheckout" :disabled="!checkoutForm.shipping_method || checkingOut">
+          <button class="btn-primary" @click="confirmCheckout" :disabled="checkingOut">
             {{ checkingOut ? 'Procesando...' : 'Confirmar y abrir chat' }}
           </button>
         </div>
@@ -188,12 +178,12 @@ export default {
   name: 'CartView',
   data() {
     return {
-      view: 'buying',
+      view: this.$route?.query?.tab === 'ventas' ? 'selling' : 'buying',
       carts: [],
       sellingCarts: [],
       loading: true,
       checkoutCart: null,
-      checkoutForm: { shipping_method: '', notes: '' },
+      checkoutForm: { notes: '' },
       checkoutError: null,
       unavailableCards: [],
       checkingOut: false,
@@ -201,6 +191,13 @@ export default {
   },
   created() {
     this.fetchCarts();
+  },
+  watch: {
+    // The navbar links straight to a tab, so arriving here from "Mis ventas"
+    // while already on /cart has to move the tab too.
+    '$route.query.tab'(tab) {
+      this.view = tab === 'ventas' ? 'selling' : 'buying';
+    },
   },
   methods: {
     fetchCarts() {
@@ -214,12 +211,16 @@ export default {
       }).catch(e => console.error(e))
         .finally(() => { this.loading = false; });
     },
-    switchToSelling() {
-      this.view = 'selling';
+    selectView(view) {
+      this.view = view;
+      const tab = view === 'selling' ? 'ventas' : undefined;
+      if (this.$route?.query?.tab !== tab) {
+        this.$router.replace({ name: 'Cart', query: tab ? { tab } : {} });
+      }
     },
     openCheckout(cart) {
       this.checkoutCart = cart;
-      this.checkoutForm = { shipping_method: '', notes: '' };
+      this.checkoutForm = { notes: '' };
       this.checkoutError = null;
       this.unavailableCards = [];
     },
@@ -353,17 +354,12 @@ export default {
 .form-group { margin-bottom: 18px; }
 .form-group label { display: block; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
 
-.shipping-options { display: flex; flex-direction: column; gap: 8px; }
-.shipping-option {
-  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+.next-step-notice {
   background: var(--bg-elevated); border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm); cursor: pointer; transition: border-color 0.15s;
+  border-radius: var(--radius-sm); padding: 10px 14px;
+  font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.5;
 }
-.shipping-option input { display: none; }
-.shipping-option.active { border-color: var(--accent); }
-.shipping-info { display: flex; flex-direction: column; gap: 2px; }
-.shipping-name { font-size: 14px; font-weight: 500; }
-.shipping-desc { font-size: 12px; color: var(--text-secondary); }
+.next-step-notice strong { color: var(--text-primary); }
 
 .trust-notice {
   background: rgba(232,160,32,0.08); border: 1px solid rgba(232,160,32,0.2);
@@ -380,6 +376,7 @@ export default {
 .unavailable-title { font-size: 13px; font-weight: 600; color: var(--danger); margin-bottom: 6px; }
 .unavailable-cards ul { margin: 0 0 6px 16px; padding: 0; }
 .unavailable-cards li { font-size: 13px; color: var(--text-primary); margin-bottom: 2px; }
+.unavailable-detail { color: var(--text-secondary); }
 .unavailable-hint { font-size: 11px; color: var(--text-secondary); }
 
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }

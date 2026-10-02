@@ -1,3 +1,5 @@
+import gzip
+import json
 import requests
 import time
 
@@ -60,28 +62,56 @@ class Scryfall:
         return data
 
     def get_bulk_data_url(self, bulk_type='oracle_cards'):
-        """Return the download URL for a Scryfall bulk data file."""
+        """Return the download URL for a Scryfall bulk data file.
+
+        Scryfall now publishes these as JSON Lines under `jsonl_download_uri`;
+        `download_uri` (a single huge JSON array) is kept as a fallback for
+        older mirrors.
+        """
         response = requests.get(f'{BASE_URL}/bulk-data', headers=HEADERS)
         if not response.ok:
             raise ScryfallRequestError(f'get_bulk_data_url: {response.status_code}')
         manifest = response.json()
         for entry in manifest['data']:
             if entry['type'] == bulk_type:
-                return entry['download_uri'], entry['name']
+                url = entry.get('jsonl_download_uri') or entry.get('download_uri')
+                if not url:
+                    raise ScryfallRequestError(f'Bulk data "{bulk_type}" has no download URL')
+                return url, entry['name']
         raise ScryfallRequestError(f'Bulk data type "{bulk_type}" not found')
 
     def iter_bulk_cards(self, bulk_type='oracle_cards'):
         """
         Yield all card dicts from a Scryfall bulk data file.
         Adds 'image_uri' key to each card.
+
+        Parsed one line at a time, so memory stays flat even for the
+        multi-gigabyte exports.
         """
         download_url, _ = self.get_bulk_data_url(bulk_type)
         response = requests.get(download_url, headers=HEADERS, stream=True)
         if not response.ok:
             raise ScryfallRequestError(f'iter_bulk_cards download: {response.status_code}')
 
-        import json
-        for card in json.loads(response.content):
+        # Scryfall serves the export as a .gz *file*, with no Content-Encoding
+        # header, so requests hands it over still compressed.
+        response.raw.decode_content = True
+        stream = response.raw
+        if download_url.endswith('.gz') or response.headers.get('Content-Type') == 'application/gzip':
+            stream = gzip.GzipFile(fileobj=response.raw)
+
+        for raw in stream:
+            if not raw:
+                continue
+            line = raw.decode('utf-8') if isinstance(raw, bytes) else raw
+            # Tolerate the legacy JSON-array framing as well as plain JSONL.
+            line = line.strip().rstrip(',')
+            if line in ('[', ']'):
+                continue
+            try:
+                card = json.loads(line)
+            except json.JSONDecodeError:
+                continue
             card['image_uri'] = _get_image_uri(card)
             yield card
 
@@ -100,6 +130,35 @@ class Scryfall:
             url = data.get('next_page') if data.get('has_more') else None
             if url:
                 time.sleep(0.1)
+
+    def fetch_cards_by_ids(self, ids):
+        """
+        Batch-resolve Scryfall UUIDs via POST /cards/collection.
+
+        Same 75-per-request budget as `fetch_cards_by_names`. Returns
+        {id: card_data} for the ones that resolved; the rest are simply absent.
+        """
+        found = {}
+        batch_size = 75
+
+        for i in range(0, len(ids), batch_size):
+            batch = ids[i:i + batch_size]
+            response = requests.post(
+                f'{BASE_URL}/cards/collection',
+                json={'identifiers': [{'id': card_id} for card_id in batch]},
+                headers=HEADERS,
+            )
+            if not response.ok:
+                raise ScryfallRequestError(f'fetch_cards_by_ids: {response.status_code}')
+
+            for card in response.json().get('data', []):
+                card['image_uri'] = _get_image_uri(card)
+                found[card['id']] = card
+
+            if i + batch_size < len(ids):
+                time.sleep(0.1)
+
+        return found
 
     def fetch_cards_by_names(self, names):
         """

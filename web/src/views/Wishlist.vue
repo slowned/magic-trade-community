@@ -351,7 +351,7 @@ export default {
 
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
   gap: 12px;
 }
 
@@ -368,7 +368,7 @@ export default {
 
 .card-img-wrapper {
   width: 100%;
-  aspect-ratio: 5 / 7;
+  aspect-ratio: 235 / 327;
   overflow: hidden;
   background: var(--bg-elevated);
 }
@@ -648,18 +648,18 @@ textarea {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  width: 80px;
+  width: 118px;
 }
 
 .match-card-img-wrapper {
   position: relative;
-  width: 80px;
+  width: 118px;
   flex-shrink: 0;
 }
 
 .match-card-img {
-  width: 80px;
-  height: 112px;
+  width: 118px;
+  height: 164px;
   object-fit: cover;
   border-radius: 4px;
   border: 1px solid var(--border-color);

@@ -1,5 +1,14 @@
 <template>
   <nav class="navbar">
+    <!-- Bazaar of Baghdad (Christopher Moeller) — a marketplace card for a
+         marketplace site. Heavily darkened so the chrome stays legible.
+         The clipping lives here, not on .navbar, so the user dropdown can
+         hang below the bar without being cut off. -->
+    <div class="navbar-bg" aria-hidden="true">
+      <div class="navbar-art"></div>
+      <div class="navbar-veil"></div>
+    </div>
+
     <div class="navbar-inner container">
       <div class="navbar-left">
         <router-link to="/" class="navbar-logo">
@@ -8,6 +17,7 @@
         </router-link>
         <nav class="nav-links">
           <router-link to="/carpetas" class="nav-link">Carpetas</router-link>
+          <router-link to="/subastas" class="nav-link">Subastas</router-link>
           <router-link v-if="isAuthenticated" to="/scanner" class="nav-link scanner-link" title="Escanear carta">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
@@ -52,13 +62,21 @@
                 <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd" /></svg>
                 Wishlist
               </router-link>
-              <router-link to="/cart" class="dropdown-item" @click="menuOpen = false">
+              <router-link :to="{ name: 'Cart' }" class="dropdown-item" @click="menuOpen = false">
                 <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3z"/><path d="M16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>
-                Carritos y ventas
+                Mis carritos
+              </router-link>
+              <router-link :to="{ name: 'Cart', query: { tab: 'ventas' } }" class="dropdown-item" @click="menuOpen = false">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path d="M4 3a2 2 0 00-2 2v1.5h16V5a2 2 0 00-2-2H4z"/><path fill-rule="evenodd" d="M18 8.5H2V15a2 2 0 002 2h12a2 2 0 002-2V8.5zM7 12a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
+                Mis ventas
               </router-link>
               <router-link to="/profile" class="dropdown-item" @click="menuOpen = false">
                 <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/></svg>
                 Mi perfil
+              </router-link>
+              <router-link v-if="isStaff" to="/subastas/admin" class="dropdown-item" @click="menuOpen = false">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/></svg>
+                Panel de subastas
               </router-link>
               <div class="dropdown-divider" />
               <button class="dropdown-item danger" @click="handleLogout">
@@ -90,7 +108,7 @@ export default {
     return { searchQuery: '', menuOpen: false };
   },
   computed: {
-    ...mapGetters(['isAuthenticated', 'currentUser']),
+    ...mapGetters(['isAuthenticated', 'currentUser', 'isStaff']),
     userInitial() {
       return (this.currentUser?.username || '?')[0].toUpperCase();
     }
@@ -134,11 +152,47 @@ export default {
   right: 0;
   z-index: 100;
   height: 64px;
-  background-color: var(--bg-surface);
-  border-bottom: 1px solid var(--border-color);
+  background-color: #0a0b12;
+  /* The double rule mimics an MTG card's frame: thin gold over dark. */
+  border-bottom: 1px solid #000;
+  box-shadow: inset 0 -1px 0 rgba(232, 160, 32, 0.20), 0 1px 14px rgba(0, 0, 0, 0.5);
+}
+
+/* Holds the art and its veil, and keeps the blur bleed inside the bar. */
+.navbar-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* The bazaar art sits behind the chrome, anchored left where the stalls are. */
+.navbar-art {
+  position: absolute;
+  inset: 0;
+  background-image: url('~@/assets/bazaar-navbar.jpg');
+  background-size: cover;
+  background-position: center 58%;
+  /* Desaturated, dimmed and softened: it should register as warm texture
+     behind the logo, not as a scene competing with the nav. */
+  filter: saturate(0.5) brightness(0.34) blur(1.5px);
+  opacity: 0.42;
+  /* Confined to the left edge — it never reaches the search or user menu. */
+  mask-image: linear-gradient(90deg, #000 0%, rgba(0,0,0,0.5) 20%, transparent 44%);
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, rgba(0,0,0,0.5) 20%, transparent 44%);
+}
+
+/* A flat wash plus a faint warm bloom on the left, to tie the art to the gold. */
+.navbar-veil {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 40% 140% at 4% 50%, rgba(232,160,32,0.06), transparent 70%),
+    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 40%);
 }
 
 .navbar-inner {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 24px;
@@ -152,12 +206,13 @@ export default {
 .nav-link {
   color: var(--text-secondary);
   font-size: 14px;
-  padding: 4px 10px;
+  padding: 5px 11px;
   border-radius: var(--radius-sm);
   transition: color 0.15s, background-color 0.15s;
   text-decoration: none;
 }
-.nav-link:hover { color: var(--text-primary); background: var(--bg-elevated); }
+.nav-link:hover { color: var(--text-primary); background: rgba(255,255,255,0.06); }
+.nav-link.router-link-active { color: var(--accent); }
 
 .scanner-link { display: flex; align-items: center; gap: 5px; }
 .scanner-link svg { width: 15px; height: 15px; }
@@ -166,13 +221,26 @@ export default {
 .navbar-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   color: var(--text-primary);
   font-weight: 700;
   font-size: 16px;
 }
 
-.logo-img { height: 28px; width: 28px; object-fit: contain; }
+.logo-text {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  font-size: 17px;
+  letter-spacing: 0.01em;
+  color: #e2cfae;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+  transition: color 0.15s;
+}
+.navbar-logo:hover .logo-text { color: #f3ddb8; }
+
+.logo-img {
+  height: 28px; width: 28px; object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.7));
+}
 
 .navbar-search {
   flex: 1;
@@ -197,8 +265,10 @@ export default {
 .search-input {
   padding-left: 34px;
   height: 36px;
-  background-color: var(--bg-primary);
+  background-color: rgba(255,255,255,0.045);
+  border-color: rgba(255,255,255,0.10);
 }
+.search-input:focus { background-color: rgba(0,0,0,0.4); }
 
 .navbar-right {
   display: flex;
@@ -215,8 +285,8 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: transparent;
-  border: 1px solid var(--border-color);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.11);
   border-radius: 999px;
   padding: 5px 12px 5px 6px;
   color: var(--text-primary);
@@ -224,7 +294,7 @@ export default {
   transition: background-color 0.15s;
 }
 
-.user-btn:hover { background-color: var(--bg-elevated); }
+.user-btn:hover { background-color: rgba(255,255,255,0.09); }
 
 .user-avatar {
   width: 26px;
@@ -303,4 +373,9 @@ export default {
 }
 
 button { padding: 7px 14px; }
+
+@media (max-width: 720px) {
+  .navbar-art { display: none; }
+  .navbar-veil { background: #0a0b12; }
+}
 </style>

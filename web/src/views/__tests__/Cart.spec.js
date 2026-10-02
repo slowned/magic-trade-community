@@ -25,11 +25,14 @@ const makeCart = (overrides = {}) => ({
   ...overrides,
 });
 
-function mountCart() {
+function mountCart(query = {}) {
   return mount(CartView, {
     global: {
       stubs: { 'router-link': true },
-      mocks: { $router: { push: vi.fn() } },
+      mocks: {
+        $router: { push: vi.fn(), replace: vi.fn() },
+        $route: { name: 'Cart', query },
+      },
     },
   });
 }
@@ -58,31 +61,40 @@ describe('Cart.vue', () => {
     wrapper.vm.openCheckout(wrapper.vm.carts[0]);
 
     expect(wrapper.vm.checkoutCart).toEqual(wrapper.vm.carts[0]);
-    expect(wrapper.vm.checkoutForm).toEqual({ shipping_method: '', notes: '' });
+    expect(wrapper.vm.checkoutForm).toEqual({ notes: '' });
     expect(wrapper.vm.unavailableCards).toEqual([]);
   });
 
-  it('confirms checkout and redirects to the order chat on success', async () => {
+  it('checks out without asking for a shipping method and lands on the chat', async () => {
     const wrapper = mountCart();
     await flushPromises();
     wrapper.vm.openCheckout(wrapper.vm.carts[0]);
-    wrapper.vm.checkoutForm.shipping_method = 'door_to_door';
 
     const updatedCart = makeCart({ id: 5, order: { id: 99, status: 'pending' } });
     BinderService.checkout.mockResolvedValue({ data: updatedCart });
 
     await wrapper.vm.confirmCheckout();
 
-    expect(BinderService.checkout).toHaveBeenCalledWith(1, { shipping_method: 'door_to_door', notes: '' });
+    expect(BinderService.checkout).toHaveBeenCalledWith(1, { notes: '' });
     expect(wrapper.vm.checkoutCart).toBeNull();
     expect(wrapper.vm.$router.push).toHaveBeenCalledWith({ name: 'OrderChat', params: { cartId: 5 } });
+  });
+
+  it('keeps the confirm button enabled with no shipping choice to make', async () => {
+    const wrapper = mountCart();
+    await flushPromises();
+    wrapper.vm.openCheckout(wrapper.vm.carts[0]);
+    await wrapper.vm.$nextTick();
+
+    const confirm = wrapper.findAll('.modal-actions button').at(1);
+    expect(confirm.attributes('disabled')).toBeUndefined();
+    expect(wrapper.find('.shipping-options').exists()).toBe(false);
   });
 
   it('surfaces unavailable cards on a 409 checkout conflict and refetches carts', async () => {
     const wrapper = mountCart();
     await flushPromises();
     wrapper.vm.openCheckout(wrapper.vm.carts[0]);
-    wrapper.vm.checkoutForm.shipping_method = 'door_to_door';
 
     BinderService.checkout.mockRejectedValue({
       response: {
@@ -101,6 +113,42 @@ describe('Cart.vue', () => {
     expect(wrapper.vm.checkoutCart).not.toBeNull();
     expect(BinderService.getCarts).toHaveBeenCalled();
     expect(wrapper.vm.$router.push).not.toHaveBeenCalled();
+  });
+
+  it('opens on the buying tab by default', async () => {
+    const wrapper = mountCart();
+    await flushPromises();
+
+    expect(wrapper.vm.view).toBe('buying');
+  });
+
+  it('opens straight on the selling tab when linked with ?tab=ventas', async () => {
+    const wrapper = mountCart({ tab: 'ventas' });
+    await flushPromises();
+
+    expect(wrapper.vm.view).toBe('selling');
+  });
+
+  it('writes the tab into the url when switching to ventas', async () => {
+    const wrapper = mountCart();
+    await flushPromises();
+
+    wrapper.vm.selectView('selling');
+
+    expect(wrapper.vm.view).toBe('selling');
+    expect(wrapper.vm.$router.replace).toHaveBeenCalledWith({
+      name: 'Cart', query: { tab: 'ventas' },
+    });
+  });
+
+  it('drops the tab from the url when switching back to comprando', async () => {
+    const wrapper = mountCart({ tab: 'ventas' });
+    await flushPromises();
+
+    wrapper.vm.selectView('buying');
+
+    expect(wrapper.vm.view).toBe('buying');
+    expect(wrapper.vm.$router.replace).toHaveBeenCalledWith({ name: 'Cart', query: {} });
   });
 
   it('removes an item and drops the whole cart when it becomes empty', async () => {

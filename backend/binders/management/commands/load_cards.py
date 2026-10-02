@@ -65,6 +65,7 @@ class Command(BaseCommand):
                         'name': card_data['name'],
                         'set_name': card_data.get('set_name', ''),
                         'set_code': card_data.get('set', ''),
+                        'collector_number': card_data.get('collector_number', ''),
                         'color_identity': ','.join(card_data.get('color_identity', [])),
                         'type_line': card_data.get('type_line', ''),
                         'uri': card_data.get('uri', ''),

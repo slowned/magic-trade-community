@@ -7,7 +7,8 @@
         <router-link to="/" class="back-link">← Binders</router-link>
         <h1 class="binder-title">{{ binderName || 'Binder' }}</h1>
         <span class="card-meta">
-          {{ filteredCards.length }} / {{ cards.length }} cartas ·
+          {{ filteredCards.length }} / {{ cards.length }} cartas
+          <span v-if="copyCount > cards.length" class="copies-meta">({{ copyCount }} copias)</span> ·
           <router-link v-if="binderOwner" :to="`/user/${binderOwner}`" class="owner-name">{{ binderOwner }}</router-link>
           <span v-else class="owner-name">{{ binderOwner }}</span>
         </span>
@@ -67,29 +68,54 @@
 
     <!-- Cards grid -->
     <div v-else class="cards-grid">
-      <div v-for="card in filteredCards" :key="card.id" class="card-item">
+      <div v-for="card in filteredCards" :key="card.binder_card_id ?? card.id" class="card-item">
         <div class="card-img-wrapper">
           <img v-if="card.image_uri" :src="card.image_uri" :alt="card.name" class="card-img" loading="lazy" />
           <div v-else class="card-img-placeholder">{{ card.name }}</div>
         </div>
         <div class="card-info">
-          <span class="card-name" :title="card.name">{{ card.name }}</span>
-          <span class="card-price" v-if="card.price_usd">${{ card.price_usd }}</span>
-        </div>
+          <!-- What the card is -->
+          <div class="card-id">
+            <span class="card-name" :title="card.name">{{ card.name }}</span>
+            <span class="card-set" :title="card.set_name">{{ card.set_name }}</span>
+            <span class="card-collector" v-if="card.collector_number">#{{ card.collector_number }}</span>
+          </div>
 
-        <!-- Cart button (only visible to non-owners) -->
-        <button
-          v-if="!isOwner"
-          class="cart-btn"
-          :class="{ disabled: !isAuthenticated }"
-          :title="isAuthenticated ? 'Agregar al carrito' : 'Registrate para comprar'"
-          @click="handleAddToCart(card)"
-        >
-          <svg viewBox="0 0 20 20" fill="currentColor">
-            <path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3z"/>
-            <path d="M16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
-          </svg>
-        </button>
+          <!-- What this particular copy is like -->
+          <dl class="card-specs">
+            <div class="spec-row">
+              <dt>Precio</dt>
+              <dd class="spec-price">{{ card.price_usd ? `$${card.price_usd}` : '—' }}</dd>
+            </div>
+            <div class="spec-row">
+              <dt>Idioma</dt>
+              <dd>{{ card.language_display || '—' }}</dd>
+            </div>
+            <div class="spec-row">
+              <dt>Condición</dt>
+              <dd>{{ card.condition_display || '—' }}</dd>
+            </div>
+            <div class="spec-row">
+              <dt>Stock</dt>
+              <dd>{{ card.quantity ?? 1 }}</dd>
+            </div>
+          </dl>
+
+          <!-- Cart button (only visible to non-owners) -->
+          <button
+            v-if="!isOwner"
+            class="add-cart-btn"
+            :class="{ disabled: !isAuthenticated }"
+            :title="isAuthenticated ? 'Agregar al carrito' : 'Registrate para comprar'"
+            @click="handleAddToCart(card)"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3z"/>
+              <path d="M16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+            </svg>
+            Agregar
+          </button>
+        </div>
       </div>
     </div>
 
@@ -142,12 +168,41 @@
             </div>
           </div>
 
+          <div class="copy-fields">
+            <label class="copy-field">
+              Cantidad
+              <input
+                v-model.number="addQuantity"
+                type="number"
+                min="1"
+                max="999"
+                class="qty-input"
+                @keydown.enter="handleAddById"
+              />
+            </label>
+            <label class="copy-field">
+              Idioma
+              <select v-model="addLanguage">
+                <option v-for="l in LANGUAGE_OPTIONS" :key="l.code" :value="l.code">{{ l.label }}</option>
+              </select>
+            </label>
+            <label class="copy-field">
+              Condición
+              <select v-model="addCondition">
+                <option v-for="c in CONDITION_OPTIONS" :key="c.code" :value="c.code">{{ c.label }}</option>
+              </select>
+            </label>
+          </div>
+
           <div v-if="addError" class="error-msg">{{ addError }}</div>
-          <div v-if="addResult" class="result-msg">✓ {{ addResult.added }} agregada</div>
+          <div v-if="addResult" class="result-msg">
+            ✓ {{ addResult.quantity > 1 ? `${addResult.quantity}× ` : '' }}{{ addResult.added }}
+            ({{ addResult.condition }}, {{ addResult.language }}) agregada
+          </div>
 
           <div class="modal-actions">
             <button class="btn-ghost" @click="closeAddModal">Cerrar</button>
-            <button class="btn-primary" :disabled="!selectedEdition || adding" @click="handleAddById">
+            <button class="btn-primary" :disabled="!selectedEdition || adding || !validQuantity" @click="handleAddById">
               {{ adding ? 'Agregando...' : 'Agregar' }}
             </button>
           </div>
@@ -180,10 +235,33 @@
         <!-- Tab: importar CSV (Moxfield) -->
         <template v-else>
           <p class="modal-hint">
-            Pegá el contenido del CSV exportado desde Moxfield.<br>
+            Subí el CSV exportado desde Moxfield, o pegá su contenido abajo.<br>
             Formato: <code>Count,Name,Edition,Condition,Language,Foil,Collector Number</code>
           </p>
-          <textarea v-model="csvData" placeholder="Count,Name,Edition,Condition,Language,Foil,Collector Number&#10;4,Lightning Bolt,M10,Near Mint,English,," rows="10" />
+
+          <pre class="csv-example">Count,Name,Edition,Condition,Language,Foil,Collector Number
+4,Lightning Bolt,M10,Near Mint,English,,146
+1,Sol Ring,C21,Near Mint,English,foil,264
+2,Arcane Signet,ELD,Slightly Played,Spanish,,331</pre>
+
+          <p class="modal-hint">
+            <strong>Foil:</strong> vacío es carta normal; <code>foil</code> la marca como foil
+            (también valen <code>yes</code>, <code>true</code> y <code>1</code>).
+          </p>
+
+          <label class="csv-dropzone" :class="{ 'has-file': csvFileName }">
+            <input type="file" accept=".csv,text/csv" @change="onCsvFile" />
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm5 5a1 1 0 112 0v3.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L9 11.586V8z" clip-rule="evenodd"/>
+            </svg>
+            <span v-if="csvFileName" class="csv-file-name">{{ csvFileName }}</span>
+            <span v-else>Elegir archivo .csv</span>
+          </label>
+          <div v-if="csvFileError" class="error-msg">{{ csvFileError }}</div>
+
+          <div class="csv-separator"><span>o pegalo a mano</span></div>
+
+          <textarea v-model="csvData" placeholder="Count,Name,Edition,Condition,Language,Foil,Collector Number&#10;4,Lightning Bolt,M10,Near Mint,English,,146&#10;1,Sol Ring,C21,Near Mint,English,foil,264" rows="8" />
 
           <div v-if="addError" class="error-msg">{{ addError }}</div>
           <div v-if="addResult" class="result-msg">
@@ -230,6 +308,7 @@
 <script>
 import { mapGetters } from 'vuex';
 import BinderService from "@/services/BinderService";
+import { CONDITION_OPTIONS, LANGUAGE_OPTIONS } from "@/utils/cardCopy";
 
 const COLOR_OPTIONS = [
   { code: 'W', symbol: 'W', label: 'Blanco' },
@@ -279,6 +358,12 @@ export default {
         return true;
       });
     },
+    copyCount() {
+      return this.cards.reduce((total, c) => total + (c.quantity || 1), 0);
+    },
+    validQuantity() {
+      return Number.isInteger(this.addQuantity) && this.addQuantity >= 1 && this.addQuantity <= 999;
+    },
     hasFilters() {
       return this.searchQuery || this.activeColors.length || this.filterSet;
     },
@@ -289,6 +374,8 @@ export default {
   data() {
     return {
       COLOR_OPTIONS,
+      CONDITION_OPTIONS,
+      LANGUAGE_OPTIONS,
       binderName: '',
       binderOwner: '',
       cards: [],
@@ -305,8 +392,13 @@ export default {
       suggestions: [],
       cardEditions: [],
       selectedEdition: null,
+      addQuantity: 1,
+      addCondition: 'NM',
+      addLanguage: 'EN',
       searchDebounce: null,
       csvData: '',
+      csvFileName: '',
+      csvFileError: null,
       adding: false,
       addError: null,
       addResult: null,
@@ -371,12 +463,45 @@ export default {
       this.showAddModal = false;
       this.newCards = '';
       this.csvData = '';
+      this.csvFileName = '';
+      this.csvFileError = null;
       this.cardSearchQuery = '';
       this.suggestions = [];
       this.cardEditions = [];
       this.selectedEdition = null;
+      this.addQuantity = 1;
+      this.addCondition = 'NM';
+      this.addLanguage = 'EN';
       this.addError = null;
       this.addResult = null;
+    },
+
+    // Reading the file here keeps the upload path identical to the paste path:
+    // the backend still receives plain CSV text via import-moxfield.
+    onCsvFile(event) {
+      const file = event.target.files?.[0];
+      this.csvFileError = null;
+      if (!file) return;
+
+      if (file.size > 2 * 1024 * 1024) {
+        this.csvFileError = 'El archivo supera los 2 MB.';
+        event.target.value = '';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        this.csvData = String(reader.result || '').trim();
+        this.csvFileName = file.name;
+        this.addError = null;
+        this.addResult = null;
+      };
+      reader.onerror = () => {
+        this.csvFileError = 'No se pudo leer el archivo.';
+        this.csvFileName = '';
+      };
+      reader.readAsText(file);
+      event.target.value = '';
     },
 
     onSearchInput() {
@@ -422,19 +547,24 @@ export default {
     },
 
     async handleAddById() {
-      if (!this.selectedEdition) return;
+      if (!this.selectedEdition || this.adding || !this.validQuantity) return;
       this.adding = true;
       this.addError = null;
       this.addResult = null;
       try {
-        const res = await BinderService.addCardById(this.$route.params.id, this.selectedEdition.id);
+        const res = await BinderService.addCardById(this.$route.params.id, this.selectedEdition.id, {
+          quantity: this.addQuantity,
+          condition: this.addCondition,
+          language: this.addLanguage,
+        });
         this.addResult = res.data;
         this.selectedEdition = null;
+        this.addQuantity = 1;
         this.cardEditions = [];
         this.cardSearchQuery = '';
         this.fetchBinder();
-      } catch {
-        this.addError = 'Error al agregar la carta.';
+      } catch (err) {
+        this.addError = err.response?.data?.error || 'Error al agregar la carta.';
       } finally {
         this.adding = false;
       }
@@ -461,6 +591,8 @@ export default {
         this.addResult = res.data;
         this.newCards = '';
         this.csvData = '';
+        this.csvFileName = '';
+        this.csvFileError = null;
         this.fetchBinder();
       } catch (e) {
         this.addError = 'Error al agregar las cartas.';
@@ -516,6 +648,8 @@ export default {
 }
 
 .binder-title { font-size: 26px; font-weight: 700; margin-bottom: 4px; }
+.copies-meta { color: var(--accent); }
+
 .card-meta { color: var(--text-secondary); font-size: 14px; }
 .owner-name { color: var(--accent); }
 
@@ -608,7 +742,7 @@ export default {
 /* Cards grid */
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
   gap: 12px;
 }
 
@@ -624,7 +758,7 @@ export default {
 
 .card-img-wrapper {
   width: 100%;
-  aspect-ratio: 5 / 7;
+  aspect-ratio: 235 / 327;
   overflow: hidden;
   background: var(--bg-elevated);
 }
@@ -644,14 +778,16 @@ export default {
 }
 
 .card-info {
-  padding: 8px 10px;
+  padding: 10px 12px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.card-name {
+/* Identity block: what card this is */
+.card-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.card-set {
   font-size: 12px;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -659,30 +795,102 @@ export default {
   text-overflow: ellipsis;
 }
 
-.card-price { font-size: 12px; color: var(--accent); white-space: nowrap; flex-shrink: 0; }
+.card-collector {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Per-copy details, split off by a rule as requested */
+.card-specs {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.spec-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.spec-row dt { font-size: 11px; color: var(--text-muted); }
+.spec-row dd {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-primary);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.spec-row dd.spec-price { color: var(--accent); font-weight: 600; font-size: 14px; }
+
+.card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
 
 /* Cart button */
-.cart-btn {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 28px;
-  height: 28px;
-  padding: 0;
+.add-cart-btn {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(18,19,26,0.85);
-  border: 1px solid var(--border-color);
-  border-radius: 50%;
-  color: var(--text-muted);
-  opacity: 0;
-  transition: opacity 0.15s, color 0.15s, background-color 0.15s;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: #12131a;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s;
 }
-.card-item:hover .cart-btn { opacity: 1; }
-.cart-btn:hover { color: var(--accent); border-color: var(--accent); }
-.cart-btn.disabled { color: var(--text-muted); cursor: not-allowed; }
-.cart-btn svg { width: 14px; height: 14px; }
+.add-cart-btn:hover { filter: brightness(1.08); }
+.add-cart-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+.add-cart-btn.disabled {
+  background: transparent;
+  border-color: var(--border-color);
+  color: var(--text-muted);
+}
+
+/* CSV upload */
+.csv-example {
+  background: var(--bg-elevated); border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; line-height: 1.6; color: var(--text-primary);
+  overflow-x: auto; white-space: pre;
+}
+
+.csv-dropzone {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 16px; margin-bottom: 12px; cursor: pointer;
+  background: var(--bg-elevated); border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 13px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.csv-dropzone:hover { border-color: var(--accent); color: var(--text-primary); }
+.csv-dropzone.has-file { border-style: solid; border-color: var(--accent); color: var(--text-primary); }
+.csv-dropzone input { display: none; }
+.csv-dropzone svg { width: 18px; height: 18px; flex-shrink: 0; }
+.csv-file-name { font-weight: 500; word-break: break-all; }
+
+.csv-separator {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 12px; color: var(--text-muted); font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.csv-separator::before, .csv-separator::after {
+  content: ''; flex: 1; height: 1px; background: var(--border-color);
+}
 
 /* Modal */
 .modal-overlay {
@@ -797,6 +1005,22 @@ textarea {
   gap: 8px;
   margin-top: 16px;
 }
+
+.copy-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+.copy-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.copy-field select { height: 34px; font-size: 13px; }
+.qty-input { width: 72px; height: 34px; }
 
 /* Spinner overlay */
 .spinner-overlay {

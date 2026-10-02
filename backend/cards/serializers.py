@@ -10,6 +10,7 @@ class CardSerializer(serializers.ModelSerializer):
             'name',
             'set_name',
             'set_code',
+            'collector_number',
             'color_identity',
             'type_line',
             'uri',

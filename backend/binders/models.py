@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 
-from cards.models import Card
+from cards.models import CONDITION_CHOICES, LANGUAGE_CHOICES, Card
 
 
 class Binder(models.Model):
@@ -23,9 +23,15 @@ class BinderCard(models.Model):
     quantity = models.PositiveIntegerField(default=1)
     foil = models.BooleanField(default=False)
     etched = models.BooleanField(default=False)
+    # Condition and language belong to the seller's physical copy, not to the
+    # printing, so they live here rather than on Card. They are part of the
+    # row's identity: 2 NM English and 1 SP Spanish copies of the same printing
+    # are two rows, each with its own quantity.
+    condition = models.CharField(max_length=3, choices=CONDITION_CHOICES, default='NM')
+    language = models.CharField(max_length=3, choices=LANGUAGE_CHOICES, default='EN')
 
     class Meta:
-        unique_together = ('binder', 'card')
+        unique_together = ('binder', 'card', 'condition', 'language')
 
     def __str__(self):
         return f"{self.quantity}x {self.card.name} in {self.binder.name}"

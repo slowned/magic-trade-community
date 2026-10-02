@@ -17,7 +17,7 @@ class CartItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CartItem
-        fields = ['id', 'card', 'quantity']
+        fields = ['id', 'card', 'quantity', 'price_ars']
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -58,12 +58,13 @@ class CartSerializer(serializers.ModelSerializer):
     item_count = serializers.SerializerMethodField()
     order = OrderSerializer(read_only=True)
     total_usd = serializers.SerializerMethodField()
+    total_ars = serializers.SerializerMethodField()
 
     class Meta:
         model = Cart
         fields = [
-            'id', 'buyer', 'seller', 'is_finalized',
-            'created_at', 'item_count', 'total_usd', 'items', 'order',
+            'id', 'buyer', 'seller', 'is_finalized', 'source',
+            'created_at', 'item_count', 'total_usd', 'total_ars', 'items', 'order',
         ]
 
     def get_item_count(self, obj):
@@ -75,3 +76,10 @@ class CartSerializer(serializers.ModelSerializer):
             for item in obj.items.all()
         )
         return float(total)
+
+    def get_total_ars(self, obj):
+        """Only meaningful for carts whose items carry an agreed ARS price."""
+        priced = [item for item in obj.items.all() if item.price_ars is not None]
+        if not priced:
+            return None
+        return float(sum(item.price_ars * item.quantity for item in priced))

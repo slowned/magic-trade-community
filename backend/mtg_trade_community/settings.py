@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "users.apps.UsersConfig",
     "cards.apps.CardsConfig",
     "carts.apps.CartsConfig",
+    "auctions.apps.AuctionsConfig",
     "scanner.apps.ScannerConfig",
     'corsheaders',  # para poder comunicarte desde afuera VUEJS
     'drf_yasg',
